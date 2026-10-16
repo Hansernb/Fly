@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+target/
+
+# 构建产物
+dist/
+build/
+
+# 日志
+log/
+*.log
+*.log.*.gz
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 系统文件
+.DS_Store
+Thumbs.db

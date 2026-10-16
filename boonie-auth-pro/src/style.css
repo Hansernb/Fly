@@ -1,0 +1,97 @@
+:root {
+  --forest: #2f7d4f;
+  --forest-deep: #1f5c39;
+  --leaf: #4caf6d;
+  --wood: #a9743c;
+  --wood-light: #c89b63;
+  --cream: #fff8ec;
+  --honey: #ffb703;
+  --text: #3a2e1f;
+  --muted: #8a7a63;
+  --danger: #e4572e;
+  --radius: 18px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Comic Sans MS", sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  z-index: 0;
+  /* 森林主题背景：晨光光斑 + 树冠层渐变 + 林间雾气 */
+  background:
+    radial-gradient(ellipse 55% 40% at 18% 8%, rgba(255, 224, 130, 0.35) 0, transparent 65%),
+    radial-gradient(ellipse 45% 35% at 85% 12%, rgba(139, 213, 158, 0.4) 0, transparent 65%),
+    radial-gradient(ellipse 70% 45% at 50% 110%, rgba(47, 125, 79, 0.14) 0, transparent 70%),
+    linear-gradient(180deg, #d9efdd 0%, #ecf6e9 32%, var(--cream) 68%, #f4edda 100%);
+  background-size: 160% 160%, 160% 160%, 100% 100%, 100% 100%;
+  animation: bgShift 16s ease-in-out infinite;
+}
+
+/* 底部森林剪影（远山树影，固定不滚动） */
+body::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 150px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='150' viewBox='0 0 360 150'%3E%3Cg fill='%231f5c39'%3E%3Cpath d='M55 150 L55 118 L38 118 L58 92 L48 92 L63 66 L78 92 L68 92 L88 118 L71 118 L71 150 Z' opacity='.10'/%3E%3Cpath d='M176 150 L176 126 L164 126 L180 106 L172 106 L184 88 L196 106 L188 106 L204 126 L192 126 L192 150 Z' opacity='.08'/%3E%3Cpath d='M295 150 L295 114 L276 114 L298 86 L287 86 L303 58 L319 86 L308 86 L330 114 L311 114 L311 150 Z' opacity='.13'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom / auto 150px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* 顶部淡淡的树冠光晕 */
+body::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 220px;
+  background:
+    radial-gradient(ellipse 40% 100% at 10% 0%, rgba(47, 125, 79, 0.12) 0, transparent 70%),
+    radial-gradient(ellipse 45% 100% at 90% 0%, rgba(47, 125, 79, 0.1) 0, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes bgShift {
+  0%,
+  100% {
+    background-position: 0% 0%, 100% 0%, 0 0, 0 0;
+  }
+  50% {
+    background-position: 100% 50%, 0% 50%, 0 0, 0 0;
+  }
+}
+
+/* 桌面优化：超宽屏下限制整体宽度并居中，避免内容被无限拉伸 */
+.auth-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  box-shadow: 0 0 80px rgba(47, 125, 79, 0.08);
+}
+
+/* 尊重「减少动态效果」的系统偏好（无障碍） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
