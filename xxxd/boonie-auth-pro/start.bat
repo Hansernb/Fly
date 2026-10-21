@@ -11,9 +11,10 @@ echo   后端: http://localhost:8080 (springBootTest)
 echo ============================================
 echo.
 
-rem 每次开机 node_modules 会被系统删除，所以先检查、缺失才安装
-if not exist "node_modules" (
-    echo [1/3] 未发现 node_modules，正在安装依赖（走国内镜像，较快）...
+rem 每次开机 node_modules 会被系统删除/损坏，所以检查“完整安装”再决定是否重装
+rem 注意：只判断 node_modules 文件夹存在会漏掉“残缺安装”（有文件夹却没有 vite），这里改为检测真正的 vite 可执行文件
+if not exist "node_modules\.bin\vite" (
+    echo [1/3] 未发现可用的 vite 依赖（node_modules 可能不完整），正在安装依赖（走国内镜像，较快）...
     call npm ci --registry=https://registry.npmmirror.com
     if errorlevel 1 (
         echo npm ci 失败，改用 npm install 重试...
@@ -26,7 +27,7 @@ if not exist "node_modules" (
         )
     )
 ) else (
-    echo [1/3] node_modules 已存在，跳过安装
+    echo [1/3] 依赖已就绪，跳过安装
 )
 
 rem 清理 vite 异常退出留下的临时文件
