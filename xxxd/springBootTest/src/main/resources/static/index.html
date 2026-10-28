@@ -1,14 +1,210 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
-</head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狗熊岭森林游乐园</title>
+    <style>
+        :root {
+            --forest: #2f7d4f;
+            --forest-dark: #1f5d3a;
+            --sand: #d9c7a7;
+            --bg: #f6f4ee;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            background: var(--bg);
+            color: #2f4a38;
+        }
+        /* ============ 导航栏 ============ */
+        .nav {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 12px 26px;
+            background: #fff;
+            border-bottom: 3px solid var(--sand);
+        }
+        .logo { font-size: 19px; font-weight: 800; color: var(--forest-dark); }
+        .nav-links { display: flex; gap: 16px; margin-left: 8px; }
+        .nav-links a {
+            color: #4a5f51; text-decoration: none; font-size: 14px; font-weight: 600;
+        }
+        .nav-links a:hover { color: var(--forest); }
+        .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .admin-entry {
+            display: inline-flex; align-items: center; gap: 6px;
+            border: 2px solid var(--forest); background: var(--forest); color: #fff;
+            font-size: 13px; font-weight: 800; padding: 7px 14px;
+            border-radius: 999px; cursor: pointer; text-decoration: none;
+        }
+        .admin-entry:hover { background: var(--forest-dark); border-color: var(--forest-dark); }
+        .who { font-size: 13px; color: #6b7f72; }
+
+        /* ============ 主体 ============ */
+        .hero {
+            padding: 46px 26px 30px; text-align: center;
+            background: linear-gradient(160deg, #eaf6ee 0%, #d8ecdf 60%, #cfe6d6 100%);
+        }
+        .hero h1 { margin: 0 0 10px; font-size: 30px; color: var(--forest-dark); }
+        .hero p { margin: 0; color: #5c7264; font-size: 14px; }
+
+        .wrap { max-width: 1100px; margin: 0 auto; padding: 30px 26px 60px; }
+        .section-title { font-size: 20px; color: var(--forest-dark); margin: 26px 0 14px; }
+
+        .grid {
+            display: grid; gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        }
+        .card {
+            background: #fff; border: 2px solid var(--sand); border-radius: 14px;
+            padding: 16px 18px; box-shadow: 0 6px 18px rgba(47,125,79,.08);
+        }
+        .card-head { display: flex; align-items: center; gap: 10px; }
+        .emoji { font-size: 26px; }
+        .card h3 { margin: 0; font-size: 17px; color: var(--forest-dark); }
+        .tag {
+            margin-left: auto; font-size: 12px; font-weight: 700; color: #fff;
+            padding: 3px 9px; border-radius: 999px;
+        }
+        .desc { margin: 10px 0; font-size: 13px; color: #5f7368; line-height: 1.7; }
+        .meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #6b7f72; }
+        .rating { color: #e9a13b; font-weight: 800; }
+
+        .reviews { margin-top: 8px; border-top: 1px dashed #e3d9c6; padding-top: 8px; }
+        .review-item { font-size: 12px; color: #6b7f72; margin: 4px 0; }
+        .review-item b { color: #4a5f51; }
+
+        .empty { color: #8a9a90; font-size: 14px; padding: 20px 0; }
+        .loading { color: #8a9a90; font-size: 14px; padding: 20px 0; }
+
+        footer {
+            text-align: center; padding: 20px; font-size: 12px; color: #8a9a90;
+            border-top: 1px solid #e3d9c6;
+        }
+    </style>
 </head>
 <body>
-<h2>Hello World!</h2>
-<a href="/user/to_login">登录</a>
-<a href="/user/test">登录2</a>
-<img src="images/1.jpg">
+
+<nav class="nav">
+    <div class="logo">🌲 狗熊岭游乐园</div>
+    <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="#attractions">游乐项目</a>
+        <a href="#reviews">游客评价</a>
+    </div>
+    <div class="nav-right">
+        <span class="who" id="who"></span>
+        <!-- 仅管理员（permission === 0）可见：进入后台管理系统 -->
+        <a id="adminEntry" class="admin-entry" href="/admin-login.html" style="display:none">
+            ⚙️ 后台管理系统
+        </a>
+    </div>
+</nav>
+
+<header class="hero">
+    <h1>🌲 欢迎来到狗熊岭森林游乐园</h1>
+    <p>穿梭千年古树、邂逅森林伙伴 —— 下面是园区正在运营的全部游乐项目</p>
+</header>
+
+<main class="wrap">
+    <h2 class="section-title" id="attractions">🎢 游乐项目（<span id="count">0</span>）</h2>
+    <div id="list" class="grid">
+        <div class="loading">加载中…</div>
+    </div>
+
+    <h2 class="section-title" id="reviews">💬 游客评价</h2>
+    <div id="reviewList"></div>
+</main>
+
+<footer>狗熊岭森林游乐园 · 演示项目（后端 8080 静态首页）</footer>
+
+<script>
+    // ---------- 载入首页展示的全部数据 ----------
+    async function loadAttractions() {
+        const box = document.getElementById('list');
+        try {
+            const res = await fetch('/api/attractions');
+            const data = await res.json();
+            const list = (data && data.data) || data || [];
+            document.getElementById('count').textContent = list.length;
+
+            if (!list.length) {
+                box.innerHTML = '<div class="empty">🍃 暂无项目数据</div>';
+                return;
+            }
+            box.innerHTML = list.map(a => {
+                const color = a.color || '#2f7d4f';
+                const reviews = (a.reviews || []).slice(0, 3).map(r =>
+                    `<div class="review-item">🐻 <b>${esc(r.name || '匿名')}</b> ${'⭐'.repeat(Math.round(r.rating || 0))} ${esc(r.text || '')}</div>`
+                ).join('');
+                return `
+        <div class="card">
+          <div class="card-head">
+            <span class="emoji">${a.emoji || '🎡'}</span>
+            <h3>${esc(a.name)}</h3>
+            <span class="tag" style="background:${color}">${esc(a.tag || '')}</span>
+          </div>
+          <p class="desc">${esc(a.desc || '')}</p>
+          <div class="meta">
+            <span>⏱ 排队约 ${a.wait ?? a.waitMinutes ?? 0} 分钟</span>
+            <span class="rating">★ ${Number(a.rating || 0).toFixed(1)}</span>
+          </div>
+          ${reviews ? `<div class="reviews">${reviews}</div>` : ''}
+        </div>`;
+            }).join('');
+        } catch (e) {
+            box.innerHTML = '<div class="empty">⚠️ 数据加载失败，请确认后端已启动</div>';
+        }
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // ---------- 管理员入口显隐：只有 permission === 0 才显示按钮 ----------
+    async function refreshAdminEntry() {
+        const token = localStorage.getItem('boonie_admin_token');
+        const entry = document.getElementById('adminEntry');
+        const who = document.getElementById('who');
+        if (!token) {
+            // 未登录：保留入口，否则管理员也进不去登录页；登录后若非管理员会被隐藏/拒绝
+            entry.style.display = 'inline-flex';
+            entry.textContent = '🔑 管理员登录';
+            who.textContent = '';
+            return;
+        }
+        try {
+            const res = await fetch('/api/me', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('no');
+            const data = await res.json();
+            const user = data.user || {};
+            // permission：1 = 默认权限（看不到按钮），0 = 管理员（显示按钮）
+            if (Number(user.permission) === 0) {
+                entry.style.display = 'inline-flex';
+                entry.textContent = '⚙️ 后台管理系统';
+                who.textContent = `你好，${user.name}（管理员）`;
+            } else {
+                entry.style.display = 'none';
+                who.textContent = `你好，${user.name}`;
+            }
+        } catch (e) {
+            entry.style.display = 'none';
+            who.textContent = '';
+        }
+    }
+
+    loadAttractions();
+    refreshAdminEntry();
+</script>
+
 </body>
 </html>

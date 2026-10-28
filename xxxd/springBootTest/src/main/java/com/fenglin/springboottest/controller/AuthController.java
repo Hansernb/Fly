@@ -22,6 +22,8 @@ public class AuthController {
         m.put("id", u.getId());
         m.put("name", u.getName());
         m.put("email", u.getEmail());
+        // 权限：1 = 默认权限（普通注册用户），0 = 管理员权限
+        m.put("permission", u.getPermission() == null ? 1 : u.getPermission());
         return m;
     }
 
@@ -44,22 +46,46 @@ public class AuthController {
         return m;
     }
 
+    /**
+     * 账号字段统一取 username（用户名登录）；若前端仍传 email 则兼容回退
+     */
+    private String accountOf(Map<String, String> body) {
+        String a = body.get("username");
+        if (a == null || a.isBlank()) a = body.get("email");
+        return a == null ? "" : a.trim();
+    }
+
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody Map<String, String> body) {
-        String email = body.get("email");
+        String account = accountOf(body);
         String password = body.get("password");
         String code = body.get("code");
 
         boolean byCode = code != null && !code.isEmpty();
         User u = byCode
-                ? authService.loginByCode(email, code)
-                : authService.loginByPassword(email, password);
+                // 验证码登录仍需靠邮箱接收验证码
+                ? authService.loginByCode(account, code)
+                : authService.loginByPassword(account, password);
 
         String token = authService.issueToken(u);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("token", token);
         m.put("user", publicUser(u));
         m.put("method", byCode ? "code" : "password");
+        return m;
+    }
+
+    /**
+     * POST /api/admin/login —— 后台管理系统登录
+     * 与普通登录的区别：额外校验必须是管理员权限（permission == 0），否则 403 拒绝
+     */
+    @PostMapping("/admin/login")
+    public Map<String, Object> adminLogin(@RequestBody Map<String, String> body) {
+        User u = authService.adminLogin(accountOf(body), body.get("password"));
+        String token = authService.issueToken(u);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("token", token);
+        m.put("user", publicUser(u));
         return m;
     }
 

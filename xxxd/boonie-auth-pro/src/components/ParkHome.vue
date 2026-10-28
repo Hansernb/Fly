@@ -37,6 +37,16 @@
         <div class="nav-user">
           <img class="nav-avatar" :src="DEFAULT_AVATAR" alt="我的头像" />
           <span class="hello">你好，{{ user.name }}</span>
+          <!-- 仅管理员可见：进入后台管理系统 -->
+          <button
+            v-if="isAdmin"
+            class="admin-entry"
+            type="button"
+            title="进入后台管理系统"
+            @click="$emit('admin')"
+          >
+            ⚙️ 后台管理系统
+          </button>
           <button class="logout" type="button" @click="$emit('logout')">🚪 退出</button>
         </div>
       </div>
@@ -464,7 +474,10 @@ const props = defineProps({
   user: { type: Object, required: true },
   token: { type: String, required: true }
 })
-const emit = defineEmits(['logout'])
+const emit = defineEmits(['logout', 'admin'])
+
+/* 仅管理员（permission === 0）才显示「后台管理系统」入口 */
+const isAdmin = computed(() => Number(props.user?.permission) === 0)
 
 /* ===================== 图片资源（public/img/*） =====================
    图片按文件名语义一一对应：
@@ -1205,6 +1218,25 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   background: var(--forest);
   border-color: var(--forest);
   color: #fff;
+}
+
+/* 后台管理系统入口按钮（仅管理员 permission===0 显示） */
+.admin-entry {
+  border: 2px solid var(--forest);
+  background: var(--forest);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(47, 125, 79, 0.25);
+}
+.admin-entry:hover {
+  background: var(--forest-deep);
+  border-color: var(--forest-deep);
+  transform: translateY(-1px);
 }
 
 /* 搜索栏 */

@@ -16,7 +16,12 @@ public class User {
     private String name;
     /** 登录邮箱（唯一） */
     private String email;
-    /** BCrypt 密码哈希 */
-    private String passwordHash;
+    /** 登录密码（按需求：明文存储，不做加密） */
+    private String password;
+    /**
+     * 权限：1 = 默认权限（注册用户），0 = 管理员权限
+     * 仅管理员可进入后台管理系统；注册用户一律为默认权限 1
+     */
+    private Integer permission;
     private LocalDateTime createdAt;
 }

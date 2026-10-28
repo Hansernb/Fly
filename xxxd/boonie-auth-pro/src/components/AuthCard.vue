@@ -53,9 +53,12 @@
         </button>
       </div>
 
-      <!-- 注册：用户名 -->
-      <div v-if="mode === 'register'" class="field">
-        <label for="username">🐾 用户名</label>
+      <!-- 用户名：注册 或 密码登录时显示（登录已由邮箱改为用户名） -->
+      <div
+        v-if="mode === 'register' || (mode === 'login' && loginType === 'password')"
+        class="field"
+      >
+        <label for="username">{{ mode === 'login' ? '👤 用户名' : '🐾 用户名' }}</label>
         <div class="input-wrap">
           <input
             id="username"
@@ -65,7 +68,7 @@
             :class="{ invalid: errors.username }"
             type="text"
             name="username"
-            placeholder="例如：bear_fan"
+            :placeholder="mode === 'login' ? '请输入用户名' : '例如：bear_fan'"
             autocomplete="username"
             maxlength="20"
           />
@@ -73,8 +76,8 @@
         <div class="err">{{ errors.username }}</div>
       </div>
 
-      <!-- 邮箱 -->
-      <div class="field">
+      <!-- 邮箱：注册 或 验证码登录时才需要（验证码发到邮箱） -->
+      <div v-if="mode === 'register' || loginType === 'code'" class="field">
         <label for="email">📮 邮箱</label>
         <div class="input-wrap">
           <input
@@ -330,7 +333,8 @@ function setMode(m) {
   nextTick(focusFirst)
 }
 function focusFirst() {
-  const el = mode.value === 'register' ? usernameEl.value : emailEl.value
+  const el =
+    mode.value === 'register' || loginType.value === 'password' ? usernameEl.value : emailEl.value
   el && el.focus()
 }
 
@@ -389,23 +393,30 @@ function validate() {
   Object.keys(errors).forEach((k) => (errors[k] = ''))
   let ok = true
 
-  if (mode.value === 'register') {
+  // 密码登录 / 注册需要用户名；验证码登录与注册需要邮箱
+  const needUsername = mode.value === 'register' || (mode.value === 'login' && loginType.value === 'password')
+  const needEmail = mode.value === 'register' || loginType.value === 'code'
+
+  if (needUsername) {
     const u = username.value
     if (!u) {
       errors.username = '请输入用户名'
       ok = false
-    } else if (!userRe.test(u)) {
+    } else if (mode.value === 'register' && !userRe.test(u)) {
+      // 注册才限制格式；登录放宽（历史用户名可能是中文，如「熊大」）
       errors.username = '用户名 3-20 位，仅限字母/数字/下划线'
       ok = false
     }
   }
 
-  if (!email.value) {
-    errors.email = '请输入邮箱'
-    ok = false
-  } else if (!emailRe.test(email.value)) {
-    errors.email = '请输入有效的邮箱地址'
-    ok = false
+  if (needEmail) {
+    if (!email.value) {
+      errors.email = '请输入邮箱'
+      ok = false
+    } else if (!emailRe.test(email.value)) {
+      errors.email = '请输入有效的邮箱地址'
+      ok = false
+    }
   }
 
   if (mode.value === 'login' && loginType.value === 'code') {
@@ -462,7 +473,7 @@ async function onSubmit() {
     body =
       loginType.value === 'code'
         ? { email: email.value, code: code.value }
-        : { email: email.value, password: password.value }
+        : { username: username.value, password: password.value }
   } else {
     url = '/api/register'
     body = { username: username.value, email: email.value, password: password.value }

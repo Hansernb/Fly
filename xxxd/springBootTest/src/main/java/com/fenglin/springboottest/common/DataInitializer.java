@@ -9,7 +9,6 @@ import com.fenglin.springboottest.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -27,15 +26,14 @@ public class DataInitializer implements ApplicationRunner {
     private AttractionMapper attractionMapper;
     @Autowired
     private ReviewMapper reviewMapper;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
 
     @Override
     public void run(ApplicationArguments args) {
         if (userMapper.selectCount(null) == 0) {
-            insertUser("熊大", "admin@boonie.com", "bear123456");
-            insertUser("熊二", "bear2@boonie.com", "bear123456");
-            System.out.println("🌲 已初始化种子用户：熊大 / 熊二（密码 bear123456）");
+            // 熊大 = 管理员权限(0)，熊二 = 默认权限(1)；密码明文存储
+            insertUser("熊大", "admin@boonie.com", "bear123456", 0);
+            insertUser("熊二", "bear2@boonie.com", "bear123456", 1);
+            System.out.println("🌲 已初始化种子用户：熊大(管理员) / 熊二（密码 bear123456，明文）");
         }
         if (attractionMapper.selectCount(null) == 0) {
             seedAttractions();
@@ -43,11 +41,13 @@ public class DataInitializer implements ApplicationRunner {
         }
     }
 
-    private void insertUser(String name, String email, String pwd) {
+    /** permission：1 = 默认权限（普通注册用户），0 = 管理员权限 */
+    private void insertUser(String name, String email, String pwd, int permission) {
         User u = new User();
         u.setName(name);
         u.setEmail(email);
-        u.setPasswordHash(passwordEncoder.encode(pwd));
+        u.setPassword(pwd);            // 明文存储（按需求，不加密）
+        u.setPermission(permission);
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
     }

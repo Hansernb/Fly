@@ -1,15 +1,25 @@
 @echo off
 chcp 936 >nul
-title springboot-api
-rem 本脚本必须放在 springBootTest 项目根目录，自动切到脚本所在目录，项目内全用相对路径
 cd /d "%~dp0"
+for %%I in ("%~dp0.") do set "PROJ=%%~nxI"
+title %PROJ% API
 
 echo ============================================
-echo   springBootTest 后端一键启动
-echo   服务地址: http://localhost:8080
-echo   前端项目: ../boonie-auth-pro (端口 5173)
+echo   %PROJ% 后端一键启动（端口动态探测）
+echo   前端项目: ../boonie-auth-pro (端口见其 vite 配置)
 echo ============================================
 echo.
+
+rem 探测端口：只读【激活 profile】对应的 application-{profile}.properties，
+rem 避免遍历到 application-prob.properties(8082) 等其它 profile 导致端口错乱
+set "ACTIVE_PROFILE=dev"
+for /f "tokens=2 delims== " %%p in ('findstr /c:"spring.profiles.active" "%~dp0src\main\resources\application.properties" 2^>nul') do set "ACTIVE_PROFILE=%%p"
+set "BE_PORT=8080"
+if exist "%~dp0src\main\resources\application-%ACTIVE_PROFILE%.properties" (
+  for /f "tokens=2 delims== " %%p in ('findstr /c:"server.port" "%~dp0src\main\resources\application-%ACTIVE_PROFILE%.properties" 2^>nul') do set "BE_PORT=%%p"
+)
+set "BE_PORT=%BE_PORT:#=%"
+echo 后端端口：%BE_PORT%
 
 rem [1/4] 检查 Java（电脑重置可能删掉 JDK）
 where java >nul 2>&1
@@ -45,12 +55,11 @@ if errorlevel 1 (
 )
 echo [3/4] 数据库 boonie_auth 就绪
 
-rem [4/4] 启动 Spring Boot（target 被删没关系，mvnw 会自动重新编译下载依赖）
-rem 防止环境变量 SERVER_PORT 劫持端口，显式固定为 8080
-set "SERVER_PORT=8080"
-echo [4/4] 正在编译并启动后端（首次编译较慢，请耐心等待）...
+rem [4/4] 启动 Spring Boot（端口固定为探测到的 %BE_PORT%，防止 SERVER_PORT 环境变量劫持）
+set "SERVER_PORT=%BE_PORT%"
+echo [4/4] 正在编译并启动后端（端口 %BE_PORT%，首次编译较慢，请耐心等待）...
 echo.
-call mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=8080
+call mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=%BE_PORT%
 
 echo.
 if errorlevel 1 (

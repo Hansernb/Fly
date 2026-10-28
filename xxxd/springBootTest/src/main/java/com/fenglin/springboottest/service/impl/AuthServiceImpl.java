@@ -6,21 +6,24 @@ import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.mapper.UserMapper;
 import com.fenglin.springboottest.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthServiceImpl implements AuthService {
 
+    /** 默认权限（普通注册用户） */
+    private static final int PERM_DEFAULT = 1;
+    /** 管理员权限 */
+    private static final int PERM_ADMIN = 0;
+
     @Autowired
     private UserMapper userMapper;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
 
     /** email(lower) -> 验证码信息 */
     private final Map<String, CodeInfo> codeStore = new ConcurrentHashMap<>();
@@ -52,23 +55,41 @@ public class AuthServiceImpl implements AuthService {
         User u = new User();
         u.setName(username);
         u.setEmail(mail);
-        u.setPasswordHash(passwordEncoder.encode(password));
+        u.setPassword(password);            // 明文存储（按需求，不加密）
+        u.setPermission(PERM_DEFAULT);      // 注册用户一律默认权限 1
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
         return u;
     }
 
+    /**
+     * 用户名 + 密码登录（原为邮箱登录，现改为按用户名 name 匹配）
+     */
     @Override
-    public User loginByPassword(String email, String password) {
-        if (email == null || password == null)
-            throw new BizException(400, "请输入邮箱和密码");
+    public User loginByPassword(String username, String password) {
+        if (username == null || username.isBlank() || password == null)
+            throw new BizException(400, "请输入用户名和密码");
+        String name = username.trim();
         User u = userMapper.selectOne(
-                new LambdaQueryWrapper<User>().eq(User::getEmail, email.trim().toLowerCase()));
+                new LambdaQueryWrapper<User>().eq(User::getName, name));
         if (u == null)
-            throw new BizException(401, "该邮箱尚未注册");
-        if (!passwordEncoder.matches(password, u.getPasswordHash()))
-            throw new BizException(401, "邮箱或密码不正确");
+            throw new BizException(401, "该用户名尚未注册");
+        if (!Objects.equals(u.getPassword(), password))   // 明文比对
+            throw new BizException(401, "用户名或密码不正确");
         return u;
+    }
+
+    @Override
+    public User adminLogin(String username, String password) {
+        User u = loginByPassword(username, password);
+        if (!isAdmin(u))
+            throw new BizException(403, "权限不足：仅管理员可进入后台管理系统");
+        return u;
+    }
+
+    @Override
+    public boolean isAdmin(User user) {
+        return user != null && Integer.valueOf(PERM_ADMIN).equals(user.getPermission());
     }
 
     @Override
