@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台管理系统 · 登录</title>
+    <style>
+        :root { --forest: #2f7d4f; --forest-dark: #1f5d3a; --sand: #d9c7a7; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: 24px; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            background: linear-gradient(160deg, #eaf6ee 0%, #d8ecdf 55%, #cfe6d6 100%);
+        }
+        .card {
+            width: 100%; max-width: 420px; background: #fff; border: 3px solid var(--sand);
+            border-radius: 18px; padding: 32px 30px 24px; box-shadow: 0 18px 44px rgba(47,125,79,.18);
+        }
+        .head { text-align: center; margin-bottom: 24px; }
+        .badge {
+            width: 58px; height: 58px; margin: 0 auto 12px; display: flex; align-items: center;
+            justify-content: center; font-size: 28px; border-radius: 16px; background: #eaf6ee;
+            border: 2px solid var(--forest);
+        }
+        h1 { margin: 0 0 6px; font-size: 22px; font-weight: 800; color: var(--forest-dark); }
+        .sub { margin: 0; font-size: 13px; color: #6b7f72; }
+        .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+        label { font-size: 13px; font-weight: 700; color: #2f4a38; }
+        input {
+            border: 2px solid #e3d9c6; border-radius: 10px; padding: 11px 14px; font-size: 14px; outline: none;
+        }
+        input:focus { border-color: var(--forest); }
+        .error {
+            display: none; margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #c0392b;
+            background: #fdecea; border: 1px solid #f5c6c2; border-radius: 8px; padding: 8px 12px;
+        }
+        .error.show { display: block; }
+        .submit {
+            width: 100%; border: none; border-radius: 10px; padding: 12px; font-size: 15px;
+            font-weight: 800; color: #fff; background: var(--forest); cursor: pointer;
+        }
+        .submit:hover:not(:disabled) { background: var(--forest-dark); }
+        .submit:disabled { opacity: .6; cursor: not-allowed; }
+        .back {
+            margin-top: 18px; width: 100%; border: 2px solid var(--sand); background: #fff; color: #2f4a38;
+            font-size: 13px; font-weight: 700; padding: 9px; border-radius: 10px; cursor: pointer;
+        }
+        .back:hover { background: #f6f1e7; }
+        .tip { margin: 14px 0 0; font-size: 12px; color: #8a9a90; text-align: center; line-height: 1.6; }
+        .no-register { text-align: center; font-size: 12px; color: #8a9a90; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="head">
+        <div class="badge">⚙️</div>
+        <h1>后台管理系统</h1>
+        <p class="sub">仅管理员可登录 · 请使用管理员账号</p>
+    </div>
+
+    <form id="form">
+        <div class="field">
+            <label for="username">管理员用户名</label>
+            <input id="username" type="text" placeholder="请输入管理员用户名" autocomplete="username" required>
+        </div>
+        <div class="field">
+            <label for="password">密码</label>
+            <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password" required>
+        </div>
+
+        <p class="error" id="error"></p>
+
+        <button class="submit" type="submit" id="submit">登录后台</button>
+    </form>
+
+    <p class="no-register">本页仅提供登录，不开放注册</p>
+    <button class="back" type="button" onclick="location.href='/'">← 返回园区首页</button>
+    <p class="tip">提示：普通用户（默认权限）无法登录后台，请联系管理员开通权限。</p>
+</div>
+
+<script>
+    const form = document.getElementById('form');
+    const errBox = document.getElementById('error');
+    const submitBtn = document.getElementById('submit');
+
+    function showError(msg) {
+        errBox.textContent = '⚠️ ' + msg;
+        errBox.classList.add('show');
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errBox.classList.remove('show');
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        if (!username || !password) { showError('请输入用户名和密码'); return; }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '登录中…';
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                // 后端对非管理员返回 403「权限不足」
+                showError(data.message || '登录失败，请检查用户名和密码');
+                return;
+            }
+            localStorage.setItem('boonie_token', data.token);
+            localStorage.setItem('boonie_admin_token', data.token);
+            location.href = '/admin.html';
+        } catch (e) {
+            showError('网络异常，请确认后端已启动');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '登录后台';
+        }
+    });
+</script>
+
+</body>
+</html>

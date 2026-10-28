@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台管理系统</title>
+    <style>
+        :root { --forest: #2f7d4f; --forest-dark: #1f5d3a; --sand: #d9c7a7; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            background: #f6f4ee; color: #2f4a38;
+        }
+        header {
+            display: flex; align-items: center; gap: 14px; padding: 14px 26px;
+            background: #fff; border-bottom: 3px solid var(--sand);
+        }
+        header h1 { margin: 0; font-size: 19px; color: var(--forest-dark); }
+        .spacer { margin-left: auto; }
+        .btn {
+            border: 2px solid var(--sand); background: #fff; color: #2f4a38; font-size: 13px;
+            font-weight: 700; padding: 7px 14px; border-radius: 9px; cursor: pointer;
+        }
+        .btn:hover { background: #f6f1e7; }
+        .btn-primary { background: var(--forest); border-color: var(--forest); color: #fff; }
+        .btn-primary:hover { background: var(--forest-dark); border-color: var(--forest-dark); }
+        .btn-danger { background: #fff; border-color: #e0b4ae; color: #c0392b; }
+        .btn-danger:hover { background: #fdecea; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        .tabs { display: flex; gap: 8px; padding: 18px 26px 0; }
+        .tab {
+            border: 2px solid var(--sand); background: #fff; padding: 9px 18px; border-radius: 10px 10px 0 0;
+            font-size: 14px; font-weight: 700; color: #4a5f51; cursor: pointer;
+        }
+        .tab.active { background: var(--forest); border-color: var(--forest); color: #fff; }
+
+        .panel { max-width: 1180px; margin: 0 auto; padding: 20px 26px 60px; }
+        .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+        .bar .title { font-size: 15px; font-weight: 800; color: var(--forest-dark); }
+
+        table { width: 100%; border-collapse: collapse; background: #fff; border: 2px solid var(--sand); border-radius: 12px; overflow: hidden; }
+        th, td { padding: 10px 12px; font-size: 13px; text-align: left; border-bottom: 1px solid #ece5d8; }
+        th { background: #eaf6ee; color: var(--forest-dark); font-weight: 800; }
+        tr:last-child td { border-bottom: none; }
+        td .ops { display: flex; gap: 6px; }
+        .empty { padding: 24px; text-align: center; color: #8a9a90; font-size: 14px; }
+
+        /* 新增/编辑表单 */
+        .form-card {
+            display: none; background: #fff; border: 2px solid var(--sand); border-radius: 12px;
+            padding: 18px; margin-bottom: 16px;
+        }
+        .form-card.show { display: block; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .form-grid label { display: block; font-size: 12px; font-weight: 700; color: #2f4a38; margin-bottom: 4px; }
+        .form-grid input, .form-grid textarea, .form-grid select {
+            width: 100%; border: 2px solid #e3d9c6; border-radius: 9px; padding: 8px 10px; font-size: 13px; outline: none;
+        }
+        .form-grid input:focus, .form-grid textarea:focus { border-color: var(--forest); }
+        .form-actions { margin-top: 14px; display: flex; gap: 10px; }
+
+        .badge-perm { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: #fff; }
+        .perm-admin { background: var(--forest); }
+        .perm-user { background: #9aa8a0; }
+
+        .msg {
+            display: none; margin: 0 0 12px; font-size: 13px; font-weight: 600; padding: 9px 12px;
+            border-radius: 8px;
+        }
+        .msg.show { display: block; }
+        .msg.ok { background: #eaf6ee; border: 1px solid #b9dcc6; color: var(--forest-dark); }
+        .msg.err { background: #fdecea; border: 1px solid #f5c6c2; color: #c0392b; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>⚙️ 后台管理系统</h1>
+    <span id="who" style="font-size:13px;color:#6b7f72"></span>
+    <div class="spacer"></div>
+    <button class="btn" onclick="location.href='/'">🏠 返回首页</button>
+    <button class="btn btn-danger" onclick="logout()">🚪 退出</button>
+</header>
+
+<div class="tabs">
+    <button class="tab active" data-tab="attractions" onclick="switchTab('attractions')">🎢 游乐项目</button>
+    <button class="tab" data-tab="reviews" onclick="switchTab('reviews')">💬 游客评价</button>
+    <button class="tab" data-tab="users" onclick="switchTab('users')">👥 用户与权限</button>
+</div>
+
+<div class="panel">
+    <p class="msg" id="msg"></p>
+
+    <!-- ============ 游乐项目 ============ -->
+    <section id="pane-attractions">
+        <div class="bar">
+            <span class="title">🎢 游乐项目管理（<span id="aCount">0</span>）</span>
+            <div class="spacer"></div>
+            <button class="btn btn-primary" onclick="openForm()">＋ 新增项目</button>
+            <button class="btn" onclick="loadAttractions()">🔄 刷新</button>
+        </div>
+
+        <div class="form-card" id="formCard">
+            <div class="form-grid">
+                <div><label>名称 *</label><input id="f-name" placeholder="如：树洞过山车"></div>
+                <div><label>图标 emoji</label><input id="f-emoji" placeholder="🎡"></div>
+                <div><label>标签</label><input id="f-tag" placeholder="刺激/浪漫/亲子/清凉/益智"></div>
+                <div><label>排队分钟</label><input id="f-wait" type="number" placeholder="0"></div>
+                <div><label>主题色</label><input id="f-color" type="color" value="#2f7d4f"></div>
+                <div style="grid-column:1/-1"><label>描述</label><textarea id="f-desc" rows="2" placeholder="项目简介/玩法"></textarea></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" id="saveBtn" onclick="saveAttraction()">保存</button>
+                <button class="btn" onclick="closeForm()">取消</button>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+            <tr><th>#</th><th>图标</th><th>名称</th><th>标签</th><th>排队(分)</th><th>描述</th><th>操作</th></tr>
+            </thead>
+            <tbody id="aBody"></tbody>
+        </table>
+    </section>
+
+    <!-- ============ 游客评价 ============ -->
+    <section id="pane-reviews" style="display:none">
+        <div class="bar">
+            <span class="title">💬 游客评价管理（<span id="rCount">0</span>）</span>
+            <div class="spacer"></div>
+            <select id="rFilter" onchange="renderReviews()" style="border:2px solid #e3d9c6;border-radius:9px;padding:7px 10px;font-size:13px">
+                <option value="">全部项目</option>
+            </select>
+            <button class="btn" onclick="loadReviews()">🔄 刷新</button>
+        </div>
+        <table>
+            <thead>
+            <tr><th>#</th><th>所属项目</th><th>评价人</th><th>评分</th><th>日期</th><th>内容</th><th>操作</th></tr>
+            </thead>
+            <tbody id="rBody"></tbody>
+        </table>
+    </section>
+
+    <!-- ============ 用户与权限 ============ -->
+    <section id="pane-users" style="display:none">
+        <div class="bar">
+            <span class="title">👥 用户与权限（<span id="uCount">0</span>）</span>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadUsers()">🔄 刷新</button>
+        </div>
+        <table>
+            <thead>
+            <tr><th>#</th><th>用户名</th><th>邮箱</th><th>权限</th><th>注册时间</th><th>操作</th></tr>
+            </thead>
+            <tbody id="uBody"></tbody>
+        </table>
+    </section>
+</div>
+
+<script>
+    const TOKEN = localStorage.getItem('boonie_admin_token') || '';
+    let editingId = null;
+    let attractionsCache = [];
+    let reviewsCache = [];
+
+    function authHeaders(json) {
+        const h = { 'Authorization': 'Bearer ' + TOKEN };
+        if (json) h['Content-Type'] = 'application/json';
+        return h;
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function msg(text, isErr) {
+        const box = document.getElementById('msg');
+        box.textContent = text;
+        box.className = 'msg show ' + (isErr ? 'err' : 'ok');
+        setTimeout(() => box.classList.remove('show'), 4000);
+    }
+
+    async function api(url, options) {
+        const res = await fetch(url, Object.assign({ headers: authHeaders(true) }, options || {}));
+        let data = {};
+        try { data = await res.json(); } catch (e) { /* ignore */ }
+        if (res.status === 401 || res.status === 403) {
+            msg('登录已过期或权限不足，请重新登录', true);
+            setTimeout(() => location.href = '/admin-login.html', 1200);
+            throw new Error('unauthorized');
+        }
+        if (!res.ok) throw new Error(data.message || ('请求失败：' + res.status));
+        return data;
+    }
+
+    // ---------------- Tab 切换 ----------------
+    function switchTab(name) {
+        document.querySelectorAll('.tab').forEach(t =>
+            t.classList.toggle('active', t.dataset.tab === name));
+        ['attractions', 'reviews', 'users'].forEach(n =>
+            document.getElementById('pane-' + n).style.display = (n === name ? 'block' : 'none'));
+    }
+
+    // ---------------- 项目 ----------------
+    async function loadAttractions() {
+        const data = await api('/api/admin/attractions');
+        attractionsCache = data.data || [];
+        document.getElementById('aCount').textContent = attractionsCache.length;
+        const body = document.getElementById('aBody');
+        if (!attractionsCache.length) {
+            body.innerHTML = '<tr><td colspan="7" class="empty">暂无项目</td></tr>';
+            return;
+        }
+        body.innerHTML = attractionsCache.map((a, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="font-size:20px">${a.emoji || '🎡'}</td>
+        <td><b>${esc(a.name)}</b></td>
+        <td>${esc(a.tag || '')}</td>
+        <td>${a.waitMinutes ?? 0}</td>
+        <td style="max-width:340px;color:#5f7368">${esc((a.description || '').slice(0, 40))}${(a.description || '').length > 40 ? '…' : ''}</td>
+        <td><div class="ops">
+          <button class="btn btn-sm" onclick='editAttraction(${JSON.stringify(a).replace(/'/g, "&#39;")})'>编辑</button>
+          <button class="btn btn-sm btn-danger" onclick="delAttraction(${a.id})">删除</button>
+        </div></td>
+      </tr>`).join('');
+    }
+
+    function openForm(a) {
+        editingId = a ? a.id : null;
+        document.getElementById('f-name').value = a ? (a.name || '') : '';
+        document.getElementById('f-emoji').value = a ? (a.emoji || '🎡') : '🎡';
+        document.getElementById('f-tag').value = a ? (a.tag || '亲子') : '亲子';
+        document.getElementById('f-wait').value = a ? (a.waitMinutes ?? 0) : 0;
+        document.getElementById('f-color').value = a ? (a.color || '#2f7d4f') : '#2f7d4f';
+        document.getElementById('f-desc').value = a ? (a.description || '') : '';
+        document.getElementById('formCard').classList.add('show');
+        document.getElementById('f-name').focus();
+    }
+    function closeForm() {
+        document.getElementById('formCard').classList.remove('show');
+        editingId = null;
+    }
+    function editAttraction(a) { openForm(a); }
+
+    async function saveAttraction() {
+        const body = {
+            name: document.getElementById('f-name').value.trim(),
+            emoji: document.getElementById('f-emoji').value.trim() || '🎡',
+            tag: document.getElementById('f-tag').value.trim() || '亲子',
+            description: document.getElementById('f-desc').value.trim(),
+            waitMinutes: Number(document.getElementById('f-wait').value || 0),
+            color: document.getElementById('f-color').value
+        };
+        if (!body.name) { msg('项目名称不能为空', true); return; }
+        try {
+            if (editingId) {
+                await api('/api/admin/attractions/' + editingId, { method: 'PUT', body: JSON.stringify(body) });
+                msg('✅ 项目已更新');
+            } else {
+                await api('/api/admin/attractions', { method: 'POST', body: JSON.stringify(body) });
+                msg('✅ 项目已新增');
+            }
+            closeForm();
+            await loadAttractions();
+        } catch (e) { msg('⚠️ ' + e.message, true); }
+    }
+
+    async function delAttraction(id) {
+        if (!confirm('删除该项目会连带删除它的全部评价，确定继续？')) return;
+        try {
+            await api('/api/admin/attractions/' + id, { method: 'DELETE' });
+            msg('✅ 已删除');
+            await loadAttractions();
+            await loadReviews();
+        } catch (e) { msg('⚠️ ' + e.message, true); }
+    }
+
+    // ---------------- 评价 ----------------
+    async function loadReviews() {
+        const data = await api('/api/admin/reviews');
+        reviewsCache = data.data || [];
+        document.getElementById('rCount').textContent = reviewsCache.length;
+
+        const sel = document.getElementById('rFilter');
+        const keep = sel.value;
+        const opts = [...new Set(reviewsCache.map(r => r.attraction))];
+        sel.innerHTML = '<option value="">全部项目</option>' +
+            opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+        sel.value = keep;
+
+        // 项目下拉也依赖项目列表
+        await loadAttractionsSilent();
+        renderReviews();
+    }
+
+    async function loadAttractionsSilent() {
+        try {
+            const d = await api('/api/admin/attractions');
+            attractionsCache = d.data || [];
+        } catch (e) { /* ignore */ }
+    }
+
+    function renderReviews() {
+        const f = document.getElementById('rFilter').value;
+        const list = f ? reviewsCache.filter(r => r.attraction === f) : reviewsCache;
+        const body = document.getElementById('rBody');
+        if (!list.length) {
+            body.innerHTML = '<tr><td colspan="7" class="empty">暂无评价</td></tr>';
+            return;
+        }
+        body.innerHTML = list.map((r, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.attraction)}</td>
+        <td>${esc(r.avatar || '🐻')} <b>${esc(r.name)}</b></td>
+        <td style="color:#e9a13b;font-weight:800">★ ${Number(r.rating || 0).toFixed(1)}</td>
+        <td>${esc(r.date || '')}</td>
+        <td style="max-width:360px;color:#5f7368">${esc(r.text || '')}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="delReview(${r.id})">删除</button></td>
+      </tr>`).join('');
+    }
+
+    async function delReview(id) {
+        if (!confirm('确定删除这条评价？')) return;
+        try {
+            await api('/api/admin/reviews/' + id, { method: 'DELETE' });
+            msg('✅ 评价已删除');
+            await loadReviews();
+        } catch (e) { msg('⚠️ ' + e.message, true); }
+    }
+
+    // ---------------- 用户 ----------------
+    async function loadUsers() {
+        const data = await api('/api/admin/users');
+        const list = data.data || [];
+        document.getElementById('uCount').textContent = list.length;
+        const body = document.getElementById('uBody');
+        if (!list.length) {
+            body.innerHTML = '<tr><td colspan="6" class="empty">暂无用户</td></tr>';
+            return;
+        }
+        body.innerHTML = list.map((u, i) => {
+            const isAdmin = Number(u.permission) === 0;
+            return `
+      <tr>
+        <td>${i + 1}</td>
+        <td><b>${esc(u.name)}</b></td>
+        <td>${esc(u.email)}</td>
+        <td><span class="badge-perm ${isAdmin ? 'perm-admin' : 'perm-user'}">${isAdmin ? '管理员(0)' : '默认(1)'}</span></td>
+        <td>${esc((u.createdAt || '').replace('T', ' ').slice(0, 19))}</td>
+        <td><div class="ops">
+          <button class="btn btn-sm" onclick="togglePerm(${u.id}, ${isAdmin ? 1 : 0})">${isAdmin ? '降为默认' : '设为管理员'}</button>
+          <button class="btn btn-sm" onclick="resetPwd(${u.id})">重置密码</button>
+        </div></td>
+      </tr>`;
+        }).join('');
+    }
+
+    async function togglePerm(id, perm) {
+        try {
+            await api('/api/admin/users/' + id, { method: 'PUT', body: JSON.stringify({ permission: perm }) });
+            msg('✅ 权限已更新');
+            await loadUsers();
+        } catch (e) { msg('⚠️ ' + e.message, true); }
+    }
+
+    async function resetPwd(id) {
+        const pwd = prompt('输入新密码（至少 6 位，明文存储）');
+        if (!pwd) return;
+        if (pwd.length < 6) { msg('密码至少 6 位', true); return; }
+        try {
+            await api('/api/admin/users/' + id, { method: 'PUT', body: JSON.stringify({ password: pwd }) });
+            msg('✅ 密码已重置');
+        } catch (e) { msg('⚠️ ' + e.message, true); }
+    }
+
+    function logout() {
+        localStorage.removeItem('boonie_admin_token');
+        localStorage.removeItem('boonie_token');
+        location.href = '/';
+    }
+
+    // ---------------- 启动：校验管理员身份 ----------------
+    (async function init() {
+        if (!TOKEN) { location.href = '/admin-login.html'; return; }
+        try {
+            const res = await fetch('/api/me', { headers: authHeaders() });
+            if (!res.ok) throw new Error('no');
+            const d = await res.json();
+            const u = d.user || {};
+            if (Number(u.permission) !== 0) {
+                alert('权限不足：仅管理员可进入后台管理系统');
+                location.href = '/';
+                return;
+            }
+            document.getElementById('who').textContent = `你好，${u.name}（管理员）`;
+        } catch (e) {
+            location.href = '/admin-login.html';
+            return;
+        }
+        await loadAttractions();
+        await loadReviews();
+        await loadUsers();
+    })();
+</script>
+
+</body>
+</html>
