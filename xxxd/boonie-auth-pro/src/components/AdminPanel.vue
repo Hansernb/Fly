@@ -74,6 +74,58 @@
         </div>
       </section>
 
+      <!-- ============ 后端项目管理 ============ -->
+      <section v-if="active === 'projects'">
+        <div class="ad-panel">
+          <div class="ad-h2-row">
+            <h2 class="ad-h2">{{ pEditingId ? '编辑项目' : '登记后端项目' }}</h2>
+            <button class="ad-btn sm" type="button" @click="checkHealth">🔍 探测全部存活</button>
+          </div>
+          <div class="ad-form">
+            <input v-model="pform.name" class="ad-input" placeholder="项目名称 *" />
+            <input v-model="pform.type" class="ad-input ad-input-sm" placeholder="类型（Spring Boot/Vue…）" />
+            <input v-model="pform.dirPath" class="ad-input ad-input-sm" placeholder="目录（springBootTest）" />
+            <input v-model.number="pform.port" class="ad-input ad-input-sm" type="number" min="0" placeholder="端口" />
+            <input v-model="pform.healthUrl" class="ad-input" placeholder="健康检查地址 http://localhost:8080/api/health" />
+            <textarea v-model="pform.description" class="ad-input ad-textarea" placeholder="项目说明"></textarea>
+            <div class="ad-form-actions">
+              <button class="ad-btn primary" type="button" @click="saveProject">
+                {{ pEditingId ? '保存修改' : '登记项目' }}
+              </button>
+              <button v-if="pEditingId" class="ad-btn" type="button" @click="resetPForm">取消编辑</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ad-panel">
+          <h2 class="ad-h2">后端项目列表（{{ projects.length }}）</h2>
+          <div v-if="!projects.length" class="ad-empty">暂无项目，先登记一个吧</div>
+          <div v-else class="ad-list">
+            <div v-for="p in projects" :key="p.id" class="ad-item">
+              <div class="ad-item-main">
+                <span class="ad-emoji" :class="{ off: p.status === 'down' }">
+                  {{ p.status === 'up' ? '🟢' : p.status === 'down' ? '🔴' : '⚪' }}
+                </span>
+                <div class="ad-item-text">
+                  <div class="ad-item-title">
+                    {{ p.name }}
+                    <span class="ad-tag">{{ p.type }}</span>
+                    <span class="ad-wait" v-if="p.port">:{{ p.port }}</span>
+                    <span class="ad-perm" :class="p.status">{{ p.status || '未探测' }}</span>
+                  </div>
+                  <div class="ad-item-desc">{{ p.description || p.dirPath || '—' }}</div>
+                  <div class="ad-item-desc" v-if="p.healthUrl">🩺 {{ p.healthUrl }}</div>
+                </div>
+              </div>
+              <div class="ad-item-ops">
+                <button class="ad-btn sm" type="button" @click="startEditProject(p)">编辑</button>
+                <button class="ad-btn sm danger" type="button" @click="removeProject(p)">删除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ============ 游客评价管理 ============ -->
       <section v-if="active === 'reviews'">
         <div class="ad-panel">
@@ -164,6 +216,7 @@ const emit = defineEmits(['exit'])
 
 const tabs = [
   { key: 'attractions', label: '游乐项目管理', icon: '🎡' },
+  { key: 'projects', label: '后端项目管理', icon: '🗂️' },
   { key: 'reviews', label: '游客评价管理', icon: '💬' },
   { key: 'users', label: '用户与权限', icon: '👥' }
 ]
@@ -172,6 +225,7 @@ const active = ref('attractions')
 const attractions = ref([])
 const reviews = ref([])
 const users = ref([])
+const projects = ref([])
 const msg = ref('')
 const msgType = ref('ok')
 
@@ -180,8 +234,15 @@ const form = ref(blankForm())
 const resetUser = ref(null)
 const newPwd = ref('')
 
+// 后端项目管理
+const pEditingId = ref(null)
+const pform = ref(blankPForm())
+
 function blankForm() {
   return { name: '', emoji: '🎡', description: '', tag: '亲子', waitMinutes: 0, color: '#2f7d4f' }
+}
+function blankPForm() {
+  return { name: '', type: 'Spring Boot', dirPath: '', port: 8080, healthUrl: '', description: '' }
 }
 
 function authHeaders() {
@@ -224,10 +285,14 @@ async function loadUsers() {
   const d = await adminFetch('/api/admin/users')
   users.value = d.data || []
 }
+async function loadProjects() {
+  const d = await adminFetch('/api/admin/projects')
+  projects.value = d.data || []
+}
 
 async function loadAll() {
   try {
-    await Promise.all([loadAttractions(), loadReviews(), loadUsers()])
+    await Promise.all([loadAttractions(), loadReviews(), loadUsers(), loadProjects()])
     flash('数据已刷新')
   } catch (e) {
     flash(e.message, 'err')
@@ -331,6 +396,72 @@ async function doReset() {
     })
     flash('密码已重置（明文保存）')
     resetUser.value = null
+  } catch (e) {
+    flash(e.message, 'err')
+  }
+}
+
+// ==================== 后端项目管理 ====================
+function startEditProject(p) {
+  pEditingId.value = p.id
+  pform.value = {
+    name: p.name,
+    type: p.type,
+    dirPath: p.dirPath || '',
+    port: p.port,
+    healthUrl: p.healthUrl || '',
+    description: p.description || ''
+  }
+}
+function resetPForm() {
+  pEditingId.value = null
+  pform.value = blankPForm()
+}
+
+async function saveProject() {
+  if (!pform.value.name || !pform.value.name.trim()) {
+    flash('项目名称不能为空', 'err')
+    return
+  }
+  try {
+    if (pEditingId.value) {
+      await adminFetch('/api/admin/projects/' + pEditingId.value, {
+        method: 'PUT',
+        body: JSON.stringify(pform.value)
+      })
+      flash('项目已更新')
+    } else {
+      await adminFetch('/api/admin/projects', {
+        method: 'POST',
+        body: JSON.stringify(pform.value)
+      })
+      flash('项目已登记')
+    }
+    resetPForm()
+    await loadProjects()
+  } catch (e) {
+    flash(e.message, 'err')
+  }
+}
+
+async function removeProject(p) {
+  if (!confirm(`确定删除项目「${p.name}」吗？`)) return
+  try {
+    await adminFetch('/api/admin/projects/' + p.id, { method: 'DELETE' })
+    flash('项目已删除')
+    await loadProjects()
+  } catch (e) {
+    flash(e.message, 'err')
+  }
+}
+
+/** 一键探测所有项目存活状态（覆盖 status 字段） */
+async function checkHealth() {
+  try {
+    const d = await adminFetch('/api/admin/projects/health')
+    projects.value = d.data || []
+    const up = projects.value.filter((p) => p.status === 'up').length
+    flash(`探测完成：${up}/${projects.value.length} 个在线`)
   } catch (e) {
     flash(e.message, 'err')
   }
@@ -461,6 +592,27 @@ onMounted(loadAll)
   font-size: 15px;
   font-weight: 800;
   color: #1f5d3a;
+}
+.ad-h2-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.ad-h2-row .ad-h2 {
+  margin: 0;
+}
+.ad-emoji.off {
+  filter: grayscale(0.2);
+}
+.ad-perm.up {
+  background: #e6f6ec;
+  color: #24603d;
+}
+.ad-perm.down {
+  background: #fdecea;
+  color: #c0392b;
 }
 .ad-hint {
   margin: -6px 0 14px;

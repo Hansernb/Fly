@@ -1,5 +1,10 @@
 <template>
   <main class="panel">
+    <!-- 后端连通性提示：后端没起来时给出友好提示，而不是每次操作都报“网络异常” -->
+    <div v-if="backendStatus === 'down'" class="net-banner">
+      ⚠️ 后端服务未连接，登录 / 注册暂时不可用，请先启动后端（双击 start.bat）
+    </div>
+
     <!-- 登录 / 注册表单（同一张卡片，顶部 Tab 切换） -->
     <form
       class="card"
@@ -285,6 +290,9 @@ const codeCountdown = ref(0)
 const toast = ref('')
 const errors = reactive({ username: '', email: '', password: '', confirm: '', agree: '', code: '' })
 
+// 后端连通性状态：checking | up | down
+const backendStatus = ref('checking')
+
 const formError = ref('')
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -383,7 +391,7 @@ async function sendCode() {
     // 演示：把验证码展示出来（真实环境应通过邮件/短信下发）
     showToast('📩 演示验证码：' + data.demoCode + '（5 分钟内有效）')
   } catch (e) {
-    formError.value = '网络异常，无法发送验证码'
+    formError.value = '网络异常：无法连接后端服务，请确认后端已启动'
   } finally {
     sendingCode.value = false
   }
@@ -508,7 +516,7 @@ async function onSubmit() {
     // 通知父组件：登录成功，进入游乐园主页
     emit('success', { user: data.user, token: data.token })
   } catch (e) {
-    formError.value = '网络异常，无法连接服务器'
+    formError.value = '网络异常：无法连接后端服务，请确认后端已启动'
     triggerShake()
   } finally {
     submitting.value = false
@@ -521,8 +529,9 @@ function onAnimEnd(e) {
   }
 }
 
-// 页面加载时：若本地存有「记住我」token，则自动恢复登录态
+// 页面加载时：探测后端连通性（给出友好提示），并自动恢复「记住我」登录态
 onMounted(async () => {
+  await checkBackend()
   const saved = localStorage.getItem('boonie_token')
   if (!saved) return
   try {
@@ -540,6 +549,19 @@ onMounted(async () => {
   }
 })
 
+/** 探测后端是否可达：GET /api/health，超时 3s 视为 down */
+async function checkBackend() {
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 3000)
+    const res = await fetch('/api/health', { signal: ctrl.signal })
+    clearTimeout(t)
+    backendStatus.value = res.ok ? 'up' : 'down'
+  } catch {
+    backendStatus.value = 'down'
+  }
+}
+
 onBeforeUnmount(() => {
   clearTimeout(toastTimer)
   clearInterval(cdTimer)
@@ -550,6 +572,7 @@ onBeforeUnmount(() => {
 .panel {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 22px;
@@ -559,6 +582,23 @@ onBeforeUnmount(() => {
     linear-gradient(160deg, rgba(255, 248, 236, 0.7) 0%, rgba(217, 239, 221, 0.58) 100%),
     url("/img/background.png") center center / cover no-repeat,
     linear-gradient(180deg, #d9efdd 0%, var(--cream) 100%);
+}
+/* 后端未连接时的友好横幅（替代每次操作都报“网络异常”） */
+.net-banner {
+  position: relative;
+  z-index: 5;
+  max-width: 400px;
+  width: 100%;
+  margin-bottom: 16px;
+  background: #fff6e6;
+  border: 1px solid #f0c987;
+  color: #9a6b1e;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 10px 14px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(154, 107, 30, 0.12);
 }
 /* 背景图边缘柔化，避免与左侧森林区生硬拼接 */
 .panel::before {

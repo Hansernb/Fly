@@ -143,6 +143,24 @@ CREATE TABLE IF NOT EXISTS `boonie_ticket` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
+-- ---------------------------- 后端项目登记表 ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_project` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(64) NOT NULL COMMENT '项目名称',
+  `type` varchar(32) NOT NULL DEFAULT '未知' COMMENT '项目类型：Spring Boot / Vue / Node 等',
+  `dir_path` varchar(128) DEFAULT NULL COMMENT '项目目录（相对工作区根目录）',
+  `port` int DEFAULT NULL COMMENT '主端口',
+  `health_url` varchar(255) DEFAULT NULL COMMENT '健康检查地址',
+  `description` text COMMENT '备注说明',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- 种子：登记本工作区下的两个核心项目（INSERT IGNORE 幂等）
+INSERT IGNORE INTO `boonie_project` (`id`, `name`, `type`, `dir_path`, `port`, `health_url`, `description`) VALUES
+(1,'森林游乐园后端','Spring Boot','springBootTest',8080,'http://localhost:8080/api/health','主后端服务：登录注册、游乐项目、游客评价、用户权限与后台管理接口（MySQL 持久化）。'),
+(2,'森林登录注册前端','Vue 3 + Vite','boonie-auth-pro',5173,'http://127.0.0.1:5173/','前端 SPA：登录注册页、游乐园主页与后台管理系统（开发服务器）。');
+
 -- ---------------------------- 种子数据：把首页原有静态数据搬进库（INSERT IGNORE 幂等） ----------------------------
 INSERT IGNORE INTO `boonie_habitat` (`id`, `emoji`, `img`, `name`, `description`, `residents`, `mood`, `color`, `rating`) VALUES
 (1,'🦉','/img/owl.jpg','猫头鹰树屋','百年老橡树上的圆圆树洞，夜幕降临后这里最热闹。','猫头鹰一家 · 夜间巡逻员','😴 白天打盹中','#7c5cbf',4.9),

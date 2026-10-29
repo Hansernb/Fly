@@ -29,12 +29,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem [2/4] 检查 MySQL（3306 端口），没运行就尝试启动服务
+rem [2/4] 检查 MySQL（3306 端口），没运行就尝试启动（服务优先，失败则直接拉起 mysqld）
+set "MYSQL_BIN=C:\Program Files\MySQL\MySQL Server 8.0\bin"
+set "MYSQL_INI=C:\ProgramData\MySQL\MySQL Server 8.0\my.ini"
+
 netstat -ano | findstr ":3306 " | findstr "LISTENING" >nul 2>&1
 if errorlevel 1 (
     echo [2/4] MySQL 未运行，尝试启动服务 MySQL80 ...
     net start MySQL80 >nul 2>&1
     timeout /t 3 /nobreak >nul
+)
+netstat -ano | findstr ":3306 " | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo [2/4] 服务启动失败，尝试直接拉起 mysqld 进程 ...
+    if exist "%MYSQL_BIN%\mysqld.exe" (
+        start "" "%MYSQL_BIN%\mysqld.exe" --defaults-file="%MYSQL_INI%" --port=3306 --bind-address=0.0.0.0
+        timeout /t 8 /nobreak >nul
+    )
 )
 netstat -ano | findstr ":3306 " | findstr "LISTENING" >nul 2>&1
 if errorlevel 1 (

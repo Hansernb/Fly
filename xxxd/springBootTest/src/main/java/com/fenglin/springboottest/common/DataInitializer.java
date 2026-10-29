@@ -6,6 +6,8 @@ import com.fenglin.springboottest.mapper.AttractionMapper;
 import com.fenglin.springboottest.mapper.ReviewMapper;
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.mapper.UserMapper;
+import com.fenglin.springboottest.mapper.ProjectMapper;
+import com.fenglin.springboottest.entity.Project;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -26,6 +28,8 @@ public class DataInitializer implements ApplicationRunner {
     private AttractionMapper attractionMapper;
     @Autowired
     private ReviewMapper reviewMapper;
+    @Autowired
+    private ProjectMapper projectMapper;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -39,6 +43,33 @@ public class DataInitializer implements ApplicationRunner {
             seedAttractions();
             System.out.println("🎡 已初始化种子游乐项目与游客评价（6 个项目 / 12 条评价）");
         }
+        if (projectMapper.selectCount(null) == 0) {
+            seedProjects();
+            System.out.println("🗂️ 已初始化后端项目登记表（2 个项目）");
+        }
+    }
+
+    /** 登记本工作区下的后端/前端项目（与 db-init.sql 种子一致，仅作双保险） */
+    private void seedProjects() {
+        insertProject("森林游乐园后端", "Spring Boot", "springBootTest", 8080,
+                "http://localhost:8080/api/health",
+                "主后端服务：登录注册、游乐项目、游客评价、用户权限与后台管理接口（MySQL 持久化）。");
+        insertProject("森林登录注册前端", "Vue 3 + Vite", "boonie-auth-pro", 5173,
+                "http://127.0.0.1:5173/",
+                "前端 SPA：登录注册页、游乐园主页与后台管理系统（开发服务器）。");
+    }
+
+    private void insertProject(String name, String type, String dirPath, Integer port,
+                              String healthUrl, String desc) {
+        Project p = new Project();
+        p.setName(name);
+        p.setType(type);
+        p.setDirPath(dirPath);
+        p.setPort(port);
+        p.setHealthUrl(healthUrl);
+        p.setDescription(desc);
+        p.setCreatedAt(LocalDateTime.now());
+        projectMapper.insert(p);
     }
 
     /** permission：1 = 默认权限（普通注册用户），0 = 管理员权限 */
