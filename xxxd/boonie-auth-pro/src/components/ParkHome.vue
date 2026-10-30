@@ -23,6 +23,18 @@
           >
         </nav>
 
+        <!-- 「评价」右侧的后台入口：深色齿轮图标按钮，悬停浮出 tooltip「管理员入口」 -->
+        <button class="gear-entry" type="button" @click="$emit('admin')">
+          <svg class="gear-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.65 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0-.06.94c0 .32.02.63.06.94L2.77 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.6.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"
+            />
+          </svg>
+          <span class="gear-text">后台管理</span>
+          <span class="gear-tip" role="tooltip">管理员入口</span>
+        </button>
+
         <!-- 汉堡按钮（窄屏） -->
         <button
           class="nav-burger"
@@ -37,16 +49,6 @@
         <div class="nav-user">
           <img class="nav-avatar" :src="DEFAULT_AVATAR" alt="我的头像" />
           <span class="hello">你好，{{ user.name }}</span>
-          <!-- 仅管理员可见：进入后台管理系统 -->
-          <button
-            v-if="isAdmin"
-            class="admin-entry"
-            type="button"
-            title="进入后台管理系统"
-            @click="$emit('admin')"
-          >
-            ⚙️ 后台管理系统
-          </button>
           <button class="logout" type="button" @click="$emit('logout')">🚪 退出</button>
         </div>
       </div>
@@ -1220,23 +1222,72 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   color: #fff;
 }
 
-/* 后台管理系统入口按钮（仅管理员 permission===0 显示） */
-.admin-entry {
-  border: 2px solid var(--forest);
-  background: var(--forest);
-  color: #fff;
+/* 「后台管理」深色齿轮入口按钮（位于「评价」右侧，悬停浮出 tooltip） */
+.gear-entry {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, #2b3a31 0%, #1d2a22 100%);
+  color: #e9dfc4;
   font-size: 13px;
-  font-weight: 800;
-  padding: 8px 16px;
+  font-weight: 700;
+  padding: 7px 13px;
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 4px 12px rgba(47, 125, 79, 0.25);
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 12px rgba(15, 30, 22, 0.32);
 }
-.admin-entry:hover {
-  background: var(--forest-deep);
-  border-color: var(--forest-deep);
+.gear-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.4s ease;
+}
+.gear-entry:hover {
+  background: linear-gradient(180deg, #35483c 0%, #243129 100%);
+  color: #f3d98a;
+  border-color: rgba(243, 217, 138, 0.45);
   transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 30, 22, 0.42);
+}
+.gear-entry:hover .gear-icon {
+  transform: rotate(90deg);
+}
+/* 悬停 tooltip：管理员入口 */
+.gear-tip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  white-space: nowrap;
+  background: rgba(24, 36, 29, 0.96);
+  color: #f3d98a;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  z-index: 30;
+}
+.gear-tip::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 9px;
+  height: 9px;
+  background: rgba(24, 36, 29, 0.96);
+}
+.gear-entry:hover .gear-tip,
+.gear-entry:focus-visible .gear-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* 搜索栏 */

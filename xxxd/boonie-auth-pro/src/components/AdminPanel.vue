@@ -1,204 +1,183 @@
 <template>
   <div class="admin">
-    <!-- 顶部栏 -->
-    <header class="ad-nav">
-      <div class="ad-nav-inner">
-        <div class="ad-logo">⚙️ 后台管理系统</div>
-        <div class="ad-user">
-          <span class="ad-who">管理员：{{ user.name }}</span>
-          <button class="ad-exit" type="button" @click="$emit('exit')">← 返回首页</button>
+    <!-- ============ 左侧深色侧边栏 ============ -->
+    <aside class="side">
+      <div class="side-logo">
+        <svg class="logo-leaf" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M20 3C10 4 4 9 4 15c0 2 .7 3.7 1.8 5C7 15 11 11 17 9c-4 2.6-7.4 6.2-9.2 10.6C10 21 13.6 22 17.5 22 20.7 22 22 19.6 22 16.5 22 10 21.5 5.5 20 3Z"
+          />
+        </svg>
+        <div class="logo-text">
+          <strong>狗熊岭后台</strong>
+          <span>森林游乐园管理系统</span>
         </div>
       </div>
-    </header>
 
-    <!-- 标签页 -->
-    <div class="ad-tabs">
-      <button
-        v-for="t in tabs"
-        :key="t.key"
-        class="ad-tab"
-        :class="{ active: active === t.key }"
-        type="button"
-        @click="active = t.key"
-      >
-        {{ t.icon }} {{ t.label }}
-      </button>
-      <button class="ad-refresh" type="button" @click="loadAll">🔄 刷新数据</button>
-    </div>
+      <nav class="side-menu" aria-label="后台菜单">
+        <button
+          v-for="s in SECTIONS"
+          :key="s.key"
+          type="button"
+          class="side-item"
+          :class="{ active: activeKey === s.key }"
+          @click="selectSection(s.key)"
+        >
+          <span class="side-icon">{{ s.icon }}</span>
+          <span class="side-name">{{ s.name }}</span>
+        </button>
+      </nav>
 
-    <div class="ad-body">
-      <p v-if="msg" class="ad-msg" :class="{ err: msgType === 'err' }">{{ msg }}</p>
+      <div class="side-foot">
+        <svg class="foot-leaf" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M20 3C10 4 4 9 4 15c0 2 .7 3.7 1.8 5C7 15 11 11 17 9c-4 2.6-7.4 6.2-9.2 10.6C10 21 13.6 22 17.5 22 20.7 22 22 19.6 22 16.5 22 10 21.5 5.5 20 3Z"
+          />
+        </svg>
+        <span>数据实时同步前台</span>
+      </div>
+    </aside>
 
-      <!-- ============ 游乐项目管理 ============ -->
-      <section v-if="active === 'attractions'">
-        <div class="ad-panel">
-          <h2 class="ad-h2">{{ editingId ? '编辑项目' : '新增项目' }}</h2>
-          <div class="ad-form">
-            <input v-model="form.name" class="ad-input" placeholder="项目名称 *" />
-            <input v-model="form.emoji" class="ad-input ad-input-sm" placeholder="图标 🎡" />
-            <input v-model="form.tag" class="ad-input ad-input-sm" placeholder="标签（刺激/浪漫/亲子/清凉/益智）" />
-            <input v-model.number="form.waitMinutes" class="ad-input ad-input-sm" type="number" min="0" placeholder="排队分钟" />
-            <input v-model="form.color" class="ad-input ad-input-sm" type="color" title="主题色" />
-            <textarea v-model="form.description" class="ad-input ad-textarea" placeholder="项目具体内容 / 玩法说明"></textarea>
-            <div class="ad-form-actions">
-              <button class="ad-btn primary" type="button" @click="saveAttraction">
-                {{ editingId ? '保存修改' : '新增项目' }}
-              </button>
-              <button v-if="editingId" class="ad-btn" type="button" @click="resetForm">取消编辑</button>
-            </div>
+    <!-- ============ 右侧浅色内容区 ============ -->
+    <main class="main">
+      <!-- 顶部：面包屑 + 管理员头像 + 退出 -->
+      <header class="topbar">
+        <nav class="crumb" aria-label="面包屑">
+          <span class="crumb-item">后台管理</span>
+          <span class="crumb-sep">/</span>
+          <span class="crumb-item current">{{ current.name }}</span>
+        </nav>
+
+        <div class="top-right">
+          <img class="admin-avatar" src="/img/avatar.jpg" alt="管理员头像" />
+          <div class="admin-who">
+            <strong>{{ user?.name || '管理员' }}</strong>
+            <span>超级管理员</span>
+          </div>
+          <button class="btn-exit" type="button" @click="onExit">退出</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="content-head">
+          <div>
+            <h1 class="page-title">{{ current.icon }} {{ current.name }}</h1>
+            <p class="page-desc">{{ current.desc }}</p>
+          </div>
+          <div class="head-actions">
+            <span v-if="msg" class="msg" :class="{ err: msgType === 'err' }">{{ msg }}</span>
+            <button class="btn-ghost" type="button" @click="load">🔄 刷新</button>
+            <button class="btn-primary" type="button" @click="openCreate">＋ 新增</button>
           </div>
         </div>
 
-        <div class="ad-panel">
-          <h2 class="ad-h2">项目列表（{{ attractions.length }}）</h2>
-          <div v-if="!attractions.length" class="ad-empty">暂无项目数据</div>
-          <div v-else class="ad-list">
-            <div v-for="a in attractions" :key="a.id" class="ad-item">
-              <div class="ad-item-main">
-                <span class="ad-emoji" :style="{ background: a.color }">{{ a.emoji }}</span>
-                <div class="ad-item-text">
-                  <div class="ad-item-title">
-                    {{ a.name }}
-                    <span class="ad-tag">{{ a.tag }}</span>
-                    <span class="ad-wait">排队 {{ a.waitMinutes }} 分钟</span>
-                  </div>
-                  <div class="ad-item-desc">{{ a.description }}</div>
-                </div>
-              </div>
-              <div class="ad-item-ops">
-                <button class="ad-btn sm" type="button" @click="startEdit(a)">编辑</button>
-                <button class="ad-btn sm danger" type="button" @click="removeAttraction(a)">删除</button>
-              </div>
-            </div>
+        <!-- 数据表格 -->
+        <div class="table-card">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th class="col-drag" title="拖拽排序"></th>
+                <th class="col-idx">#</th>
+                <th v-for="c in current.columns" :key="c.key">{{ c.label }}</th>
+                <th class="col-switch">上下架</th>
+                <th class="col-ops">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, i) in rows"
+                :key="row.id ?? row._k"
+                class="tbl-row"
+                :class="{ dragging: dragIndex === i, off: !row.enabled }"
+                draggable="true"
+                @dragstart="onDragStart(i)"
+                @dragover.prevent="onDragOver(i)"
+                @drop.prevent="onDrop(i)"
+                @dragend="onDragEnd"
+              >
+                <td class="col-drag"><span class="drag-handle" title="按住拖拽排序">⋮⋮</span></td>
+                <td class="col-idx">{{ i + 1 }}</td>
+                <td v-for="c in current.columns" :key="c.key">
+                  <span v-if="c.type === 'color'" class="dot" :style="{ background: row[c.key] }"></span>
+                  <span v-else>{{ display(row, c) }}</span>
+                </td>
+                <td class="col-switch">
+                  <button
+                    type="button"
+                    class="sw"
+                    :class="{ on: row.enabled !== false }"
+                    :aria-pressed="row.enabled !== false"
+                    @click="toggleEnabled(row)"
+                  >
+                    <span class="sw-dot"></span>
+                  </button>
+                </td>
+                <td class="col-ops">
+                  <button class="op" type="button" @click="openEdit(row)">编辑</button>
+                  <button class="op danger" type="button" @click="removeRow(row)">删除</button>
+                </td>
+              </tr>
+              <tr v-if="!rows.length">
+                <td class="empty" :colspan="current.columns.length + 4">暂无数据，点击右上角「＋ 新增」添加</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="tip">
+          💡 拖拽行首的 ⋮⋮ 可调整顺序；「上下架」控制前台是否展示。
+          <template v-if="current.api">本模块已对接后端接口，保存后前台首页实时生效。</template>
+          <template v-else>本模块为本地配置（后端暂未开放接口），数据保存在浏览器本地。</template>
+        </p>
+      </div>
+    </main>
+
+    <!-- ============ 新增 / 编辑弹窗 ============ -->
+    <div v-if="editing" class="mask" @click.self="closeForm">
+      <div class="modal">
+        <h2 class="modal-title">{{ editing.id ? '编辑' : '新增' }} · {{ current.name }}</h2>
+        <div class="modal-body">
+          <label v-for="c in current.columns" :key="c.key" class="fld">
+            <span class="fld-label">{{ c.label }}</span>
+
+            <select v-if="c.type === 'select'" v-model="form[c.key]" class="fld-input">
+              <option v-for="o in c.options" :key="o.value ?? o" :value="o.value ?? o">
+                {{ o.label ?? o }}
+              </option>
+            </select>
+
+            <textarea
+              v-else-if="c.type === 'textarea'"
+              v-model="form[c.key]"
+              class="fld-input"
+              rows="3"
+            ></textarea>
+
+            <input v-else-if="c.type === 'color'" v-model="form[c.key]" class="fld-color" type="color" />
+
+            <input
+              v-else
+              v-model="form[c.key]"
+              class="fld-input"
+              :type="c.type === 'number' ? 'number' : 'text'"
+              :placeholder="'请输入' + c.label"
+            />
+          </label>
+
+          <div class="fld fld-inline">
+            <span class="fld-label">上架状态</span>
+            <button type="button" class="sw" :class="{ on: form.enabled !== false }" @click="toggleFormEnabled">
+              <span class="sw-dot"></span>
+            </button>
           </div>
         </div>
-      </section>
-
-      <!-- ============ 后端项目管理 ============ -->
-      <section v-if="active === 'projects'">
-        <div class="ad-panel">
-          <div class="ad-h2-row">
-            <h2 class="ad-h2">{{ pEditingId ? '编辑项目' : '登记后端项目' }}</h2>
-            <button class="ad-btn sm" type="button" @click="checkHealth">🔍 探测全部存活</button>
-          </div>
-          <div class="ad-form">
-            <input v-model="pform.name" class="ad-input" placeholder="项目名称 *" />
-            <input v-model="pform.type" class="ad-input ad-input-sm" placeholder="类型（Spring Boot/Vue…）" />
-            <input v-model="pform.dirPath" class="ad-input ad-input-sm" placeholder="目录（springBootTest）" />
-            <input v-model.number="pform.port" class="ad-input ad-input-sm" type="number" min="0" placeholder="端口" />
-            <input v-model="pform.healthUrl" class="ad-input" placeholder="健康检查地址 http://localhost:8080/api/health" />
-            <textarea v-model="pform.description" class="ad-input ad-textarea" placeholder="项目说明"></textarea>
-            <div class="ad-form-actions">
-              <button class="ad-btn primary" type="button" @click="saveProject">
-                {{ pEditingId ? '保存修改' : '登记项目' }}
-              </button>
-              <button v-if="pEditingId" class="ad-btn" type="button" @click="resetPForm">取消编辑</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="ad-panel">
-          <h2 class="ad-h2">后端项目列表（{{ projects.length }}）</h2>
-          <div v-if="!projects.length" class="ad-empty">暂无项目，先登记一个吧</div>
-          <div v-else class="ad-list">
-            <div v-for="p in projects" :key="p.id" class="ad-item">
-              <div class="ad-item-main">
-                <span class="ad-emoji" :class="{ off: p.status === 'down' }">
-                  {{ p.status === 'up' ? '🟢' : p.status === 'down' ? '🔴' : '⚪' }}
-                </span>
-                <div class="ad-item-text">
-                  <div class="ad-item-title">
-                    {{ p.name }}
-                    <span class="ad-tag">{{ p.type }}</span>
-                    <span class="ad-wait" v-if="p.port">:{{ p.port }}</span>
-                    <span class="ad-perm" :class="p.status">{{ p.status || '未探测' }}</span>
-                  </div>
-                  <div class="ad-item-desc">{{ p.description || p.dirPath || '—' }}</div>
-                  <div class="ad-item-desc" v-if="p.healthUrl">🩺 {{ p.healthUrl }}</div>
-                </div>
-              </div>
-              <div class="ad-item-ops">
-                <button class="ad-btn sm" type="button" @click="startEditProject(p)">编辑</button>
-                <button class="ad-btn sm danger" type="button" @click="removeProject(p)">删除</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 游客评价管理 ============ -->
-      <section v-if="active === 'reviews'">
-        <div class="ad-panel">
-          <h2 class="ad-h2">游客评价（{{ reviews.length }}）</h2>
-          <div v-if="!reviews.length" class="ad-empty">暂无评价数据</div>
-          <div v-else class="ad-list">
-            <div v-for="r in reviews" :key="r.id" class="ad-item">
-              <div class="ad-item-main">
-                <span class="ad-emoji">{{ r.avatar || '🐻' }}</span>
-                <div class="ad-item-text">
-                  <div class="ad-item-title">
-                    {{ r.name }}
-                    <span class="ad-tag">{{ r.attraction }}</span>
-                    <span class="ad-wait">⭐ {{ r.rating }}</span>
-                    <span class="ad-wait">{{ r.date }}</span>
-                  </div>
-                  <div class="ad-item-desc">{{ r.text }}</div>
-                </div>
-              </div>
-              <div class="ad-item-ops">
-                <button class="ad-btn sm danger" type="button" @click="removeReview(r)">删除</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ 用户与权限管理 ============ -->
-      <section v-if="active === 'users'">
-        <div class="ad-panel">
-          <h2 class="ad-h2">用户管理（{{ users.length }}）</h2>
-          <p class="ad-hint">权限说明：<b>0 = 管理员</b>（可见并登录后台）；<b>1 = 默认权限</b>（普通注册用户，看不到后台入口也无法登录）。</p>
-          <div v-if="!users.length" class="ad-empty">暂无用户</div>
-          <div v-else class="ad-list">
-            <div v-for="u in users" :key="u.id" class="ad-item">
-              <div class="ad-item-main">
-                <span class="ad-emoji">{{ u.permission === 0 ? '👑' : '🐻' }}</span>
-                <div class="ad-item-text">
-                  <div class="ad-item-title">
-                    {{ u.name }}
-                    <span class="ad-wait">{{ u.email }}</span>
-                    <span class="ad-perm" :class="{ admin: u.permission === 0 }">
-                      {{ u.permission === 0 ? '管理员(0)' : '默认权限(1)' }}
-                    </span>
-                  </div>
-                  <div class="ad-item-desc">注册时间：{{ u.createdAt || '-' }}</div>
-                </div>
-              </div>
-              <div class="ad-item-ops">
-                <button
-                  class="ad-btn sm"
-                  type="button"
-                  @click="togglePermission(u)"
-                >
-                  {{ u.permission === 0 ? '降为默认' : '设为管理员' }}
-                </button>
-                <button class="ad-btn sm" type="button" @click="openReset(u)">重置密码</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- 重置密码弹窗 -->
-    <div v-if="resetUser" class="ad-mask" @click="resetUser = null">
-      <div class="ad-modal" @click.stop>
-        <h3 class="ad-h2">重置「{{ resetUser.name }}」的密码</h3>
-        <p class="ad-hint">新密码以明文保存到数据库（按项目约定不加密），至少 6 位。</p>
-        <input v-model="newPwd" class="ad-input" placeholder="输入新密码（至少 6 位）" />
-        <div class="ad-form-actions">
-          <button class="ad-btn primary" type="button" @click="doReset">确认重置</button>
-          <button class="ad-btn" type="button" @click="resetUser = null">取消</button>
+        <div class="modal-foot">
+          <button class="btn-ghost" type="button" @click="closeForm">取消</button>
+          <button class="btn-primary" type="button" :disabled="saving" @click="saveForm">
+            {{ saving ? '保存中…' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
@@ -206,596 +185,867 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 
 const props = defineProps({
-  user: { type: Object, required: true },
-  token: { type: String, required: true }
+  user: { type: Object, default: null },
+  token: { type: String, default: '' }
 })
 const emit = defineEmits(['exit'])
 
-const tabs = [
-  { key: 'attractions', label: '游乐项目管理', icon: '🎡' },
-  { key: 'projects', label: '后端项目管理', icon: '🗂️' },
-  { key: 'reviews', label: '游客评价管理', icon: '💬' },
-  { key: 'users', label: '用户与权限', icon: '👥' }
+/* ===================== 模块配置（9 个菜单） ===================== */
+const SECTIONS = [
+  {
+    key: 'banner',
+    name: '首页 Banner 管理',
+    icon: '🖼️',
+    desc: '配置前台首页顶部轮播横幅的内容与跳转',
+    columns: [
+      { key: 'title', label: '标题', type: 'text' },
+      { key: 'subtitle', label: '副标题', type: 'text' },
+      { key: 'link', label: '跳转板块', type: 'select', options: ['游乐项目', '栖息地', '演出', '门票', '风景'] },
+      { key: 'color', label: '主色', type: 'color' }
+    ],
+    seed: [
+      { title: '春日森林季', subtitle: '樱花飘落的日子，来狗熊岭散步吧', link: '游乐项目', color: '#f2a0bd' },
+      { title: '熊出没剧场', subtitle: '每天四场，熊大熊二等你来', link: '演出', color: '#f5a623' },
+      { title: '亲子探险路线', subtitle: '一条线玩遍十大打卡点', link: '风景', color: '#4c9be8' }
+    ]
+  },
+  {
+    key: 'projects',
+    name: '热门项目管理',
+    icon: '🎡',
+    desc: '管理前台「游乐项目」卡片，保存后前台首页实时生效',
+    api: '/api/admin/attractions',
+    columns: [
+      { key: 'name', label: '项目名称', type: 'text' },
+      { key: 'emoji', label: '图标', type: 'text' },
+      { key: 'tag', label: '标签', type: 'select', options: ['刺激', '浪漫', '亲子', '清凉', '益智'] },
+      { key: 'waitMinutes', label: '排队(分钟)', type: 'number' },
+      { key: 'color', label: '主题色', type: 'color' },
+      { key: 'description', label: '玩法说明', type: 'textarea' }
+    ],
+    seed: []
+  },
+  {
+    key: 'shows',
+    name: '演出时刻表',
+    icon: '🎪',
+    desc: '维护各剧场的演出时间与地点',
+    columns: [
+      { key: 'name', label: '演出名称', type: 'text' },
+      { key: 'time', label: '时间', type: 'text' },
+      { key: 'place', label: '地点', type: 'text' },
+      { key: 'duration', label: '时长(分钟)', type: 'number' }
+    ],
+    seed: [
+      { name: '熊大熊二迎宾秀', time: '09:30', place: '中心广场', duration: 20 },
+      { name: '森林杂技表演', time: '11:00', place: '松林剧场', duration: 35 },
+      { name: '光头强伐木大赛', time: '14:30', place: '木屋舞台', duration: 25 },
+      { name: '暮光萤火音乐会', time: '19:00', place: '湖畔草地', duration: 45 }
+    ]
+  },
+  {
+    key: 'routes',
+    name: '游园路线',
+    icon: '🗺️',
+    desc: '推荐游玩路线与强度分级',
+    columns: [
+      { key: 'name', label: '路线名称', type: 'text' },
+      { key: 'stops', label: '途经点数', type: 'number' },
+      { key: 'duration', label: '建议时长(小时)', type: 'number' },
+      { key: 'level', label: '强度', type: 'select', options: ['轻松', '适中', '挑战'] }
+    ],
+    seed: [
+      { name: '亲子半日游', stops: 6, duration: 4, level: '轻松' },
+      { name: '刺激一整天', stops: 10, duration: 8, level: '挑战' },
+      { name: '浪漫黄昏线', stops: 5, duration: 3, level: '适中' }
+    ]
+  },
+  {
+    key: 'spots',
+    name: '打卡圣地',
+    icon: '📸',
+    desc: '前台热门拍照点推荐',
+    columns: [
+      { key: 'name', label: '打卡点', type: 'text' },
+      { key: 'tag', label: '风格', type: 'select', options: ['花海', '林间', '湖畔', '木屋', '云端'] },
+      { key: 'hot', label: '热度', type: 'number' }
+    ],
+    seed: [
+      { name: '樱花大道', tag: '花海', hot: 98 },
+      { name: '古树树洞', tag: '林间', hot: 91 },
+      { name: '萤火湖畔', tag: '湖畔', hot: 87 }
+    ]
+  },
+  {
+    key: 'realtime',
+    name: '实时数据配置',
+    icon: '📊',
+    desc: '配置前台实时数据看板的指标项',
+    columns: [
+      { key: 'label', label: '指标名称', type: 'text' },
+      { key: 'value', label: '当前值', type: 'text' },
+      { key: 'unit', label: '单位', type: 'text' },
+      { key: 'refresh', label: '刷新间隔(秒)', type: 'number' }
+    ],
+    seed: [
+      { label: '在园游客', value: '3,280', unit: '人', refresh: 30 },
+      { label: '平均排队', value: '18', unit: '分钟', refresh: 60 },
+      { label: '今日演出', value: '6', unit: '场', refresh: 120 }
+    ]
+  },
+  {
+    key: 'weather',
+    name: '天气 / 客流',
+    icon: '🌤️',
+    desc: '维护天气与客流预测，供前台展示',
+    columns: [
+      { key: 'date', label: '日期', type: 'text' },
+      { key: 'weather', label: '天气', type: 'select', options: ['晴', '多云', '阴', '小雨', '阵雨'] },
+      { key: 'temp', label: '气温(℃)', type: 'number' },
+      { key: 'flow', label: '预计客流', type: 'number' }
+    ],
+    seed: [
+      { date: '今天', weather: '晴', temp: 24, flow: 3200 },
+      { date: '明天', weather: '多云', temp: 22, flow: 2800 },
+      { date: '后天', weather: '小雨', temp: 19, flow: 1500 }
+    ]
+  },
+  {
+    key: 'coupon',
+    name: '优惠券 / 积分',
+    icon: '🎟️',
+    desc: '配置可发放的优惠券与积分规则',
+    columns: [
+      { key: 'name', label: '名称', type: 'text' },
+      { key: 'type', label: '类型', type: 'select', options: ['优惠券', '积分'] },
+      { key: 'amount', label: '面额(元)', type: 'number' },
+      { key: 'points', label: '所需积分', type: 'number' }
+    ],
+    seed: [
+      { name: '春日踏青券', type: '优惠券', amount: 20, points: 0 },
+      { name: '森林积分兑换', type: '积分', amount: 10, points: 200 },
+      { name: '亲子套票立减', type: '优惠券', amount: 50, points: 0 }
+    ]
+  },
+  {
+    key: 'settings',
+    name: '管理员设置',
+    icon: '👤',
+    desc: '查看并调整账号权限（对接后端用户接口）',
+    api: '/api/admin/users',
+    columns: [
+      { key: 'name', label: '账号', type: 'text' },
+      { key: 'email', label: '邮箱', type: 'text' },
+      {
+        key: 'permission',
+        label: '权限',
+        type: 'select',
+        options: [
+          { value: 0, label: '管理员' },
+          { value: 1, label: '普通用户' }
+        ]
+      }
+    ],
+    seed: []
+  }
 ]
-const active = ref('attractions')
 
-const attractions = ref([])
-const reviews = ref([])
-const users = ref([])
-const projects = ref([])
+const activeKey = ref(SECTIONS[0].key)
+const current = computed(() => SECTIONS.find((s) => s.key === activeKey.value))
+const rows = ref([])
 const msg = ref('')
 const msgType = ref('ok')
+const editing = ref(null)
+const form = reactive({})
+const saving = ref(false)
+const dragIndex = ref(-1)
 
-const editingId = ref(null)
-const form = ref(blankForm())
-const resetUser = ref(null)
-const newPwd = ref('')
+/* ===================== 本地持久化（后端暂无接口的模块） ===================== */
+const LS = (k) => 'boonie_admin_rows_' + k
+const LS_ORDER = (k) => 'boonie_admin_order_' + k
+const LS_ENABLED = (k) => 'boonie_admin_enabled_' + k
 
-// 后端项目管理
-const pEditingId = ref(null)
-const pform = ref(blankPForm())
-
-function blankForm() {
-  return { name: '', emoji: '🎡', description: '', tag: '亲子', waitMinutes: 0, color: '#2f7d4f' }
+function readJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    return fallback
+  }
 }
-function blankPForm() {
-  return { name: '', type: 'Spring Boot', dirPath: '', port: 8080, healthUrl: '', description: '' }
+function writeJSON(key, val) {
+  localStorage.setItem(key, JSON.stringify(val))
+}
+
+function persistLocal() {
+  const key = activeKey.value
+  writeJSON(LS(key), rows.value)
+}
+
+/** 上下架 / 排序覆盖（后端暂无 sort、enabled 字段，落本地保证刷新后仍生效） */
+function persistOverlay() {
+  const key = activeKey.value
+  const en = {}
+  rows.value.forEach((r) => (en[r.id ?? r._k] = r.enabled !== false))
+  writeJSON(LS_ENABLED(key), en)
+  writeJSON(LS_ORDER(key), rows.value.map((r) => r.id ?? r._k))
+}
+
+/* ===================== 数据加载 ===================== */
+async function load() {
+  const sec = current.value
+  rows.value = []
+  if (sec.api) {
+    try {
+      const res = await fetch(sec.api, { headers: authHeaders() })
+      const data = await res.json()
+      let list = data.data ?? data.attractions ?? data.users ?? data.list ?? []
+      const en = readJSON(LS_ENABLED(sec.key), {})
+      list = list.map((r) => ({ ...r, enabled: en[r.id] !== undefined ? en[r.id] : true }))
+      const order = readJSON(LS_ORDER(sec.key), null)
+      if (order && order.length) {
+        list.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+      }
+      rows.value = list
+      return
+    } catch {
+      flash('加载失败，请确认后端已启动', 'err')
+      return
+    }
+  }
+  const local = readJSON(LS(sec.key), null)
+  rows.value = local && local.length ? local : sec.seed.map((s, i) => ({ ...s, _k: i + 1, enabled: true }))
 }
 
 function authHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + props.token
+  return props.token
+    ? { Authorization: 'Bearer ' + props.token, 'Content-Type': 'application/json' }
+    : { 'Content-Type': 'application/json' }
+}
+
+function selectSection(key) {
+  activeKey.value = key
+  msg.value = ''
+  load()
+}
+
+/* ===================== 增删改 ===================== */
+function blankForm() {
+  const f = { enabled: true }
+  current.value.columns.forEach((c) => {
+    if (c.type === 'number') f[c.key] = 0
+    else if (c.type === 'color') f[c.key] = '#4caf50'
+    else if (c.type === 'select') f[c.key] = c.options[0].value ?? c.options[0]
+    else f[c.key] = ''
+  })
+  return f
+}
+
+function openCreate() {
+  editing.value = { id: null }
+  Object.assign(form, blankForm())
+}
+function openEdit(row) {
+  editing.value = { id: row.id ?? row._k }
+  Object.assign(form, blankForm(), JSON.parse(JSON.stringify(row)))
+}
+function closeForm() {
+  editing.value = null
+}
+function toggleFormEnabled() {
+  form.enabled = form.enabled === false
+}
+
+async function saveForm() {
+  const sec = current.value
+  saving.value = true
+  try {
+    if (sec.api) {
+      const payload = {}
+      sec.columns.forEach((c) => (payload[c.key] = form[c.key]))
+      const isEdit = !!(editing.value && editing.value.id)
+      const res = await fetch(sec.api + (isEdit ? '/' + editing.value.id : ''), {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        flash(d.message || '保存失败', 'err')
+        return
+      }
+      flash('已保存，前台首页已同步 ✓')
+    } else {
+      if (editing.value && editing.value.id) {
+        const row = rows.value.find((r) => (r.id ?? r._k) === editing.value.id)
+        if (row) Object.assign(row, JSON.parse(JSON.stringify(form)))
+      } else {
+        rows.value.push({ ...JSON.parse(JSON.stringify(form)), _k: Date.now() })
+      }
+      persistLocal()
+      flash('已保存（本地配置）')
+    }
+    closeForm()
+    await load()
+  } catch {
+    flash('网络异常，请确认后端已启动', 'err')
+  } finally {
+    saving.value = false
   }
 }
 
+async function removeRow(row) {
+  if (!confirm('确定删除这条记录吗？')) return
+  const sec = current.value
+  const id = row.id ?? row._k
+  if (sec.api && row.id) {
+    try {
+      const res = await fetch(sec.api + '/' + row.id, { method: 'DELETE', headers: authHeaders() })
+      if (!res.ok) {
+        flash('删除失败', 'err')
+        return
+      }
+      flash('已删除，前台首页已同步 ✓')
+    } catch {
+      flash('网络异常，请确认后端已启动', 'err')
+      return
+    }
+  } else {
+    rows.value = rows.value.filter((r) => (r.id ?? r._k) !== id)
+    persistLocal()
+    flash('已删除')
+  }
+  await load()
+}
+
+function toggleEnabled(row) {
+  row.enabled = row.enabled === false
+  if (current.value.api) persistOverlay()
+  else persistLocal()
+  flash(row.enabled ? '已上架' : '已下架')
+}
+
+/* ===================== 拖拽排序 ===================== */
+function onDragStart(i) {
+  dragIndex.value = i
+}
+function onDragOver() {
+  /* 允许放置 */
+}
+function onDrop(i) {
+  const from = dragIndex.value
+  if (from < 0 || from === i) return
+  const list = rows.value.slice()
+  const moved = list.splice(from, 1)[0]
+  list.splice(i, 0, moved)
+  rows.value = list
+  if (current.value.api) persistOverlay()
+  else persistLocal()
+  flash('顺序已更新')
+}
+function onDragEnd() {
+  dragIndex.value = -1
+}
+
+/* ===================== 其它 ===================== */
+let msgTimer = null
 function flash(text, type = 'ok') {
   msg.value = text
   msgType.value = type
-  setTimeout(() => (msg.value = ''), 3000)
+  clearTimeout(msgTimer)
+  msgTimer = setTimeout(() => (msg.value = ''), 3000)
 }
 
-/** 统一请求：非 2xx 时抛出后端返回的 message */
-async function adminFetch(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...authHeaders(), ...(options.headers || {}) }
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const err = new Error(data.message || '操作失败')
-    err.status = res.status
-    throw err
-  }
-  return data
+function display(row, c) {
+  const v = row[c.key]
+  if (c.key === 'permission') return Number(v) === 0 ? '管理员' : '普通用户'
+  if (v === undefined || v === null || v === '') return '—'
+  const s = String(v)
+  return s.length > 22 ? s.slice(0, 22) + '…' : s
 }
 
-async function loadAttractions() {
-  const d = await adminFetch('/api/admin/attractions')
-  attractions.value = d.data || []
-}
-async function loadReviews() {
-  const d = await adminFetch('/api/admin/reviews')
-  reviews.value = d.data || []
-}
-async function loadUsers() {
-  const d = await adminFetch('/api/admin/users')
-  users.value = d.data || []
-}
-async function loadProjects() {
-  const d = await adminFetch('/api/admin/projects')
-  projects.value = d.data || []
+function onExit() {
+  emit('exit')
 }
 
-async function loadAll() {
-  try {
-    await Promise.all([loadAttractions(), loadReviews(), loadUsers(), loadProjects()])
-    flash('数据已刷新')
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-function startEdit(a) {
-  editingId.value = a.id
-  form.value = {
-    name: a.name,
-    emoji: a.emoji,
-    description: a.description || '',
-    tag: a.tag,
-    waitMinutes: a.waitMinutes,
-    color: a.color
-  }
-}
-function resetForm() {
-  editingId.value = null
-  form.value = blankForm()
-}
-
-async function saveAttraction() {
-  if (!form.value.name || !form.value.name.trim()) {
-    flash('项目名称不能为空', 'err')
-    return
-  }
-  try {
-    if (editingId.value) {
-      await adminFetch('/api/admin/attractions/' + editingId.value, {
-        method: 'PUT',
-        body: JSON.stringify(form.value)
-      })
-      flash('项目已更新')
-    } else {
-      await adminFetch('/api/admin/attractions', {
-        method: 'POST',
-        body: JSON.stringify(form.value)
-      })
-      flash('项目已新增')
-    }
-    resetForm()
-    await loadAttractions()
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-async function removeAttraction(a) {
-  if (!confirm(`确定删除项目「${a.name}」吗？该项目下的评价也会一并删除。`)) return
-  try {
-    await adminFetch('/api/admin/attractions/' + a.id, { method: 'DELETE' })
-    flash('项目已删除')
-    await loadAttractions()
-    await loadReviews()
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-async function removeReview(r) {
-  if (!confirm(`确定删除「${r.name}」的评价吗？`)) return
-  try {
-    await adminFetch('/api/admin/reviews/' + r.id, { method: 'DELETE' })
-    flash('评价已删除')
-    await loadReviews()
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-async function togglePermission(u) {
-  const next = u.permission === 0 ? 1 : 0
-  const tip = next === 0 ? '设为管理员（可登录后台）' : '降为默认权限（无法登录后台）'
-  if (!confirm(`确定把「${u.name}」${tip}吗？`)) return
-  try {
-    await adminFetch('/api/admin/users/' + u.id, {
-      method: 'PUT',
-      body: JSON.stringify({ permission: next })
-    })
-    flash('权限已更新')
-    await loadUsers()
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-function openReset(u) {
-  resetUser.value = u
-  newPwd.value = ''
-}
-async function doReset() {
-  if (!newPwd.value || newPwd.value.length < 6) {
-    flash('新密码至少 6 位', 'err')
-    return
-  }
-  try {
-    await adminFetch('/api/admin/users/' + resetUser.value.id, {
-      method: 'PUT',
-      body: JSON.stringify({ password: newPwd.value })
-    })
-    flash('密码已重置（明文保存）')
-    resetUser.value = null
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-// ==================== 后端项目管理 ====================
-function startEditProject(p) {
-  pEditingId.value = p.id
-  pform.value = {
-    name: p.name,
-    type: p.type,
-    dirPath: p.dirPath || '',
-    port: p.port,
-    healthUrl: p.healthUrl || '',
-    description: p.description || ''
-  }
-}
-function resetPForm() {
-  pEditingId.value = null
-  pform.value = blankPForm()
-}
-
-async function saveProject() {
-  if (!pform.value.name || !pform.value.name.trim()) {
-    flash('项目名称不能为空', 'err')
-    return
-  }
-  try {
-    if (pEditingId.value) {
-      await adminFetch('/api/admin/projects/' + pEditingId.value, {
-        method: 'PUT',
-        body: JSON.stringify(pform.value)
-      })
-      flash('项目已更新')
-    } else {
-      await adminFetch('/api/admin/projects', {
-        method: 'POST',
-        body: JSON.stringify(pform.value)
-      })
-      flash('项目已登记')
-    }
-    resetPForm()
-    await loadProjects()
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-async function removeProject(p) {
-  if (!confirm(`确定删除项目「${p.name}」吗？`)) return
-  try {
-    await adminFetch('/api/admin/projects/' + p.id, { method: 'DELETE' })
-    flash('项目已删除')
-    await loadProjects()
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-/** 一键探测所有项目存活状态（覆盖 status 字段） */
-async function checkHealth() {
-  try {
-    const d = await adminFetch('/api/admin/projects/health')
-    projects.value = d.data || []
-    const up = projects.value.filter((p) => p.status === 'up').length
-    flash(`探测完成：${up}/${projects.value.length} 个在线`)
-  } catch (e) {
-    flash(e.message, 'err')
-  }
-}
-
-onMounted(loadAll)
+onMounted(load)
 </script>
 
 <style scoped>
 .admin {
+  display: flex;
   min-height: 100vh;
-  background: #f4f7f5;
-  padding-bottom: 40px;
+  background: #f5f7f4;
 }
 
-.ad-nav {
-  background: #2f7d4f;
-  color: #fff;
+/* ================= 侧边栏（深色 + 金色点缀） ================= */
+.side {
+  width: 232px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #16291f 0%, #101f17 100%);
+  color: #cfded2;
 }
-.ad-nav-inner {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 14px 24px;
+.side-logo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.ad-logo {
-  font-size: 18px;
-  font-weight: 800;
-}
-.ad-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.ad-who {
-  font-size: 13px;
-  opacity: 0.9;
-}
-.ad-exit {
-  border: 2px solid #fff;
-  background: transparent;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 7px 14px;
-  border-radius: 9px;
-  cursor: pointer;
-}
-.ad-exit:hover {
-  background: #fff;
-  color: #2f7d4f;
-}
-
-.ad-tabs {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 18px 24px 0;
-  display: flex;
   gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
+  padding: 20px 18px;
+  border-bottom: 1px solid rgba(232, 196, 106, 0.14);
 }
-.ad-tab {
-  border: 2px solid #d9e2dc;
-  background: #fff;
-  color: #2f4a38;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 9px 16px;
-  border-radius: 10px;
-  cursor: pointer;
+.logo-leaf {
+  width: 26px;
+  height: 26px;
+  color: #e8c46a;
+  flex-shrink: 0;
 }
-.ad-tab:hover {
-  border-color: #2f7d4f;
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
 }
-.ad-tab.active {
-  background: #2f7d4f;
-  border-color: #2f7d4f;
-  color: #fff;
-}
-.ad-refresh {
-  margin-left: auto;
-  border: 2px solid #d9e2dc;
-  background: #fff;
-  color: #2f4a38;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 9px 16px;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.ad-body {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 18px 24px 0;
-}
-
-.ad-msg {
-  margin: 0 0 14px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  background: #eaf6ee;
-  color: #24603d;
-  border: 1px solid #bfe0c9;
-}
-.ad-msg.err {
-  background: #fdecea;
-  color: #c0392b;
-  border-color: #f5c6c2;
-}
-
-.ad-panel {
-  background: #fff;
-  border: 1px solid #e3e9e5;
-  border-radius: 14px;
-  padding: 18px 20px;
-  margin-bottom: 18px;
-  box-shadow: 0 6px 18px rgba(47, 125, 79, 0.06);
-}
-.ad-h2 {
-  margin: 0 0 14px;
+.logo-text strong {
   font-size: 15px;
+  color: #f3ecd8;
   font-weight: 800;
-  color: #1f5d3a;
 }
-.ad-h2-row {
+.logo-text span {
+  font-size: 11px;
+  color: #8ea596;
+}
+
+.side-menu {
+  flex: 1;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+.side-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.ad-h2-row .ad-h2 {
-  margin: 0;
-}
-.ad-emoji.off {
-  filter: grayscale(0.2);
-}
-.ad-perm.up {
-  background: #e6f6ec;
-  color: #24603d;
-}
-.ad-perm.down {
-  background: #fdecea;
-  color: #c0392b;
-}
-.ad-hint {
-  margin: -6px 0 14px;
-  font-size: 12px;
-  color: #7b8b81;
-  line-height: 1.6;
-}
-
-.ad-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
-}
-.ad-input {
-  border: 2px solid #e3e9e5;
-  border-radius: 9px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #b3c6b9;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
   padding: 10px 12px;
-  font-size: 14px;
-  outline: none;
-  font-family: inherit;
-}
-.ad-input:focus {
-  border-color: #2f7d4f;
-}
-.ad-input-sm {
-  min-width: 120px;
-}
-.ad-textarea {
-  grid-column: 1 / -1;
-  min-height: 78px;
-  resize: vertical;
-}
-.ad-form-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 10px;
-}
-
-.ad-btn {
-  border: 2px solid #cfdad3;
-  background: #fff;
-  color: #2f4a38;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 9px 16px;
-  border-radius: 9px;
+  border-radius: 10px;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.ad-btn:hover {
-  border-color: #2f7d4f;
+.side-item:hover {
+  background: rgba(232, 196, 106, 0.1);
+  color: #f3ecd8;
 }
-.ad-btn.primary {
-  background: #2f7d4f;
-  border-color: #2f7d4f;
-  color: #fff;
+.side-item.active {
+  background: linear-gradient(90deg, rgba(232, 196, 106, 0.2), rgba(232, 196, 106, 0.04));
+  color: #f7dd9a;
+  box-shadow: inset 3px 0 0 #e8c46a;
 }
-.ad-btn.primary:hover {
-  background: #24603d;
-}
-.ad-btn.danger {
-  color: #c0392b;
-  border-color: #f0c9c4;
-}
-.ad-btn.danger:hover {
-  background: #c0392b;
-  border-color: #c0392b;
-  color: #fff;
-}
-.ad-btn.sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.ad-empty {
-  font-size: 13px;
-  color: #93a49a;
-  padding: 18px 0;
+.side-icon {
+  font-size: 15px;
+  width: 20px;
   text-align: center;
 }
 
-.ad-list {
+.side-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  font-size: 11.5px;
+  color: #7d9086;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.foot-leaf {
+  width: 16px;
+  height: 16px;
+  color: rgba(232, 196, 106, 0.55);
+}
+
+/* ================= 内容区 ================= */
+.main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
-.ad-item {
+.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  border: 1px solid #e9efeb;
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: #fbfdfc;
+  gap: 16px;
+  padding: 14px 26px;
+  background: #fff;
+  border-bottom: 1px solid #e6ebe6;
 }
-.ad-item-main {
+.crumb {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  gap: 7px;
+  font-size: 13px;
 }
-.ad-emoji {
-  width: 40px;
-  height: 40px;
-  flex: none;
+.crumb-item {
+  color: #8b9a90;
+}
+.crumb-sep {
+  color: #c3cec5;
+}
+.crumb-item.current {
+  color: #2f4a38;
+  font-weight: 700;
+}
+.top-right {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  border-radius: 11px;
-  background: #eaf6ee;
+  gap: 10px;
 }
-.ad-item-text {
-  min-width: 0;
+.admin-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e8c46a;
 }
-.ad-item-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: #24402f;
+.admin-who {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  line-height: 1.25;
 }
-.ad-item-desc {
-  font-size: 12px;
-  color: #7b8b81;
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+.admin-who strong {
+  font-size: 13px;
+  color: #2f4a38;
 }
-.ad-tag,
-.ad-wait {
+.admin-who span {
   font-size: 11px;
-  font-weight: 600;
-  color: #5c7365;
-  background: #eef4f0;
-  border-radius: 6px;
-  padding: 2px 7px;
+  color: #8b9a90;
 }
-.ad-perm {
-  font-size: 11px;
-  font-weight: 800;
-  border-radius: 6px;
-  padding: 2px 8px;
-  background: #eef4f0;
-  color: #5c7365;
+.btn-exit {
+  border: 1px solid #dfe5df;
+  background: #fff;
+  color: #6b7c71;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
-.ad-perm.admin {
-  background: #fff3d6;
-  color: #a9743c;
-}
-.ad-item-ops {
-  display: flex;
-  gap: 8px;
-  flex: none;
+.btn-exit:hover {
+  border-color: #e0a52a;
+  color: #b5811a;
+  background: #fffaf0;
 }
 
-.ad-mask {
+.content {
+  flex: 1;
+  padding: 22px 26px 30px;
+  overflow-y: auto;
+}
+.content-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.page-title {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 800;
+  color: #24382c;
+}
+.page-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: #7d8c82;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.msg {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #2f7d4f;
+  background: #eaf6ee;
+  border: 1px solid #bfe3c8;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+.msg.err {
+  color: #c0392b;
+  background: #fdecea;
+  border-color: #f5c6c2;
+}
+.btn-primary {
+  border: none;
+  background: linear-gradient(135deg, #f7dd9a, #e0b455);
+  color: #3a2a08;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(224, 180, 85, 0.3);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-ghost {
+  border: 1px solid #dfe5df;
+  background: #fff;
+  color: #5f7066;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  border-color: #c3cec5;
+}
+
+/* ================= 表格 ================= */
+.table-card {
+  background: #fff;
+  border: 1px solid #e6ebe6;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(30, 50, 38, 0.05);
+}
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tbl thead th {
+  background: #f6f9f7;
+  color: #6b7c71;
+  font-weight: 700;
+  text-align: left;
+  padding: 11px 12px;
+  border-bottom: 1px solid #e6ebe6;
+  white-space: nowrap;
+}
+.tbl tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f4f1;
+  color: #3d4f44;
+  vertical-align: middle;
+}
+.tbl-row:hover {
+  background: #fafcfb;
+}
+.tbl-row.dragging {
+  opacity: 0.45;
+  background: #fff8e8;
+}
+.tbl-row.off td {
+  color: #a9b5ac;
+}
+.col-drag {
+  width: 40px;
+  text-align: center;
+}
+.drag-handle {
+  cursor: grab;
+  color: #b6c2b9;
+  font-size: 14px;
+  user-select: none;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+.col-idx {
+  width: 42px;
+  color: #a9b5ac;
+}
+.col-switch {
+  width: 92px;
+  text-align: center;
+}
+.col-ops {
+  width: 130px;
+}
+.op {
+  border: 1px solid #dfe5df;
+  background: #fff;
+  color: #5f7066;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+  margin-right: 6px;
+}
+.op:hover {
+  border-color: #e8c46a;
+  color: #b5811a;
+}
+.op.danger:hover {
+  border-color: #e08a7a;
+  color: #c0392b;
+}
+.dot {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  vertical-align: middle;
+}
+.empty {
+  text-align: center;
+  padding: 34px 0;
+  color: #a1aea5;
+}
+
+/* 上下架开关 */
+.sw {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: #d5ddd7;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  padding: 0;
+}
+.sw.on {
+  background: linear-gradient(135deg, #6fcf97, #3f9c68);
+}
+.sw-dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.18s ease;
+}
+.sw.on .sw-dot {
+  transform: translateX(20px);
+}
+
+.tip {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #8b9a90;
+  line-height: 1.7;
+}
+
+/* ================= 弹窗 ================= */
+.mask {
   position: fixed;
   inset: 0;
-  background: rgba(20, 40, 28, 0.45);
+  background: rgba(16, 31, 23, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  z-index: 50;
+  padding: 20px;
+  z-index: 60;
 }
-.ad-modal {
+.modal {
   width: 100%;
-  max-width: 380px;
+  max-width: 460px;
   background: #fff;
   border-radius: 14px;
-  padding: 20px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
 }
-.ad-modal .ad-input {
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 12px;
+.modal-title {
+  margin: 0;
+  padding: 16px 20px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #24382c;
+  border-bottom: 1px solid #eef2ef;
+}
+.modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-height: 56vh;
+  overflow-y: auto;
+}
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fld-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.fld-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #5f7066;
+}
+.fld-input {
+  border: 1px solid #dfe5df;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: #3d4f44;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+}
+.fld-input:focus {
+  border-color: #e8c46a;
+  box-shadow: 0 0 0 3px rgba(232, 196, 106, 0.15);
+}
+.fld-color {
+  width: 52px;
+  height: 34px;
+  border: 1px solid #dfe5df;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  padding: 2px;
+}
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #fafcfb;
+  border-top: 1px solid #eef2ef;
+}
+
+@media (max-width: 900px) {
+  .side {
+    width: 74px;
+  }
+  .side-name,
+  .logo-text,
+  .side-foot span {
+    display: none;
+  }
+  .side-logo {
+    justify-content: center;
+  }
+  .side-item {
+    justify-content: center;
+  }
 }
 </style>
