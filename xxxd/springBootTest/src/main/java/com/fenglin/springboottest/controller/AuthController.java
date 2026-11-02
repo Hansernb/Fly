@@ -17,6 +17,9 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
+    @Autowired
+    private com.fenglin.springboottest.common.AvatarStorage avatarStorage;
+
     private Map<String, Object> publicUser(User u) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", u.getId());
@@ -24,6 +27,7 @@ public class AuthController {
         m.put("email", u.getEmail());
         // 权限：1 = 默认权限（普通注册用户），0 = 管理员权限
         m.put("permission", u.getPermission() == null ? 1 : u.getPermission());
+        m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
         return m;
     }
 
@@ -34,6 +38,52 @@ public class AuthController {
         m.put("time", java.time.Instant.now().toString());
         m.put("users", authService.countUsers());
         return m;
+    }
+
+    /**
+     * PUT /api/me/avatar —— 登录用户修改自己的头像（无需管理员权限）。
+     * 与后台改他人头像的规则完全一致：只接受默认头像或已上传头像的地址。
+     */
+    @PutMapping("/me/avatar")
+    public Map<String, Object> updateMyAvatar(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        User me = authService.verifyToken(bearer(auth));
+        if (me == null)
+            throw new BizException(401, "未登录或登录已过期");
+
+        Object raw = body.get("avatar");
+        String av = raw == null ? "" : String.valueOf(raw);
+        if (!isValidAvatarUrl(av))
+            throw new BizException(400, "头像地址不合法");
+
+        String oldAvatar = me.getAvatar();
+        me.setAvatar(av);
+        authService.updateAvatar(me.getId(), av);
+
+        // 头像变了才清理旧文件；且仅当它不再被任何用户/评价引用时才真正删除
+        if (!java.util.Objects.equals(oldAvatar, av)) {
+            avatarStorage.deleteIfUnreferenced(oldAvatar);
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ok", true);
+        m.put("user", publicUser(me));
+        return m;
+    }
+
+    private String bearer(String auth) {
+        if (auth == null) return null;
+        String a = auth.trim();
+        return a.startsWith("Bearer ") ? a.substring(7).trim() : a;
+    }
+
+    /** 只接受两种合法形态：默认头像 /img/defaults/xxx.jpg，或上传头像 /api/avatar/文件名 */
+    private boolean isValidAvatarUrl(String av) {
+        if (av == null || av.isEmpty() || av.length() > 255) return false;
+        if (av.contains("..") || av.contains("\\")) return false;
+        return av.matches("^/img/defaults/[\\w.-]+\\.(jpg|jpeg|png|gif|webp)$")
+                || av.matches("^/api/avatar/[\\w-]+\\.(jpg|jpeg|png|gif|webp)$");
     }
 
     @PostMapping("/send-code")
@@ -91,7 +141,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public Map<String, Object> register(@RequestBody Map<String, String> body) {
-        User u = authService.register(body.get("username"), body.get("email"), body.get("password"));
+        User u = authService.register(body.get("username"), body.get("email"), body.get("password"), body.get("avatar"));
         String token = authService.issueToken(u);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("token", token);

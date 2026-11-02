@@ -68,7 +68,7 @@ public class AttractionController {
         }
 
         String name = (String) body.getOrDefault("name", "匿名游客");
-        String avatar = (String) body.getOrDefault("avatar", "🐻");
+        String avatar = sanitizeReviewAvatar((String) body.get("avatar"));
 
         Review r = attractionService.addReview(attractionId, name, avatar, rating, content);
 
@@ -76,6 +76,27 @@ public class AttractionController {
         out.put("ok", true);
         out.put("review", toReviewMap(r, null, null));
         return out;
+    }
+
+    /**
+     * 评价头像只接受两种形态：
+     *  - 站内图片路径（默认头像 /img/defaults/…、上传头像 /api/avatar/…、以及历史 /img/xxx.jpg）
+     *  - 纯 emoji（历史数据，如 🐻）
+     * 其它一律回退默认 emoji，避免把任意字符串写进库、或破坏前端 img src。
+     */
+    private String sanitizeReviewAvatar(String raw) {
+        String fallback = "🐻";
+        if (raw == null) return fallback;
+        String v = raw.trim();
+        if (v.isEmpty()) return fallback;
+        if (v.startsWith("/img/") || v.startsWith("/api/avatar/")) {
+            // 站内路径：不允许穿越与反斜杠，长度受字段 varchar(255) 限制
+            if (v.contains("..") || v.contains("\\") || v.length() > 255) return fallback;
+            return v;
+        }
+        // 纯 emoji / 短文本：放宽到 16 字符内且不含协议与斜杠
+        if (v.length() <= 16 && !v.contains(":") && !v.contains("/")) return v;
+        return fallback;
     }
 
     private Map<String, Object> toReviewMap(Review r, String attractionName, Long attractionId) {

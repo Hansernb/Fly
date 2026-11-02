@@ -23,5 +23,7 @@ public class User {
      * 仅管理员可进入后台管理系统；注册用户一律为默认权限 1
      */
     private Integer permission;
+    /** 头像地址：默认头像 /img/defaults/avatar-N.jpg，或上传后 /api/avatar/文件名 */
+    private String avatar;
     private LocalDateTime createdAt;
 }

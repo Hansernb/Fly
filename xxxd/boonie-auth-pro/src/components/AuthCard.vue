@@ -14,7 +14,7 @@
       @animationend="onAnimEnd"
     >
       <!-- 顶部头像：与首页一致（public/img/avatar.jpg），替换原 AI 熊头 -->
-      <img class="avatar-badge" src="/img/avatar.jpg" alt="我的头像" />
+      <img class="avatar-badge" :src="mode === 'register' ? avatar : '/img/avatar.jpg'" alt="我的头像" />
 
       <!-- 模式切换（带滑动指示条） -->
       <div class="tabs">
@@ -38,6 +38,36 @@
       <h2>{{ mode === 'login' ? '欢迎回来' : '创建你的森林账号' }}</h2>
       <div class="sub">
         {{ mode === 'login' ? '和熊大熊二一起玩' : '和熊大熊二一起守护狗熊岭' }}
+      </div>
+
+      <!-- 注册：头像选择（3 个默认头像 + 自定义上传） -->
+      <div v-if="mode === 'register'" class="avatar-pick">
+        <div class="avatar-pick-title">🐾 选一个森林头像</div>
+        <div class="avatar-opts">
+          <button
+            v-for="(a, i) in defaultAvatars"
+            :key="i"
+            type="button"
+            class="avatar-opt"
+            :class="{ active: avatar === a }"
+            @click="avatar = a"
+          >
+            <img :src="a" alt="默认头像" />
+          </button>
+          <label class="avatar-opt upload" :class="{ active: isCustomAvatar }">
+            <img v-if="isCustomAvatar" :src="avatar" alt="自定义头像" />
+            <span v-else>＋</span>
+            <input
+              type="file"
+              accept="image/*"
+              class="avatar-file"
+              :disabled="uploading"
+              @change="onAvatarUpload"
+            />
+          </label>
+        </div>
+        <div v-if="uploading" class="avatar-hint">上传中…</div>
+        <div v-else-if="isCustomAvatar" class="avatar-hint">已使用自定义头像</div>
       </div>
 
       <!-- 登录：密码 / 验证码 子切换 -->
@@ -283,6 +313,60 @@ const showPassword = ref(false)
 const showConfirm = ref(false)
 const agree = ref(false)
 const remember = ref(false)
+
+// 头像：注册时可选 3 个默认头像之一，或上传自定义头像
+const defaultAvatars = [
+  '/img/defaults/avatar-1.jpg',
+  '/img/defaults/avatar-2.jpg',
+  '/img/defaults/avatar-3.jpg'
+]
+const avatar = ref(defaultAvatars[0])
+const uploading = ref(false)
+// 是否使用“上传的自定义头像”（以 /api/avatar/ 开头）
+const isCustomAvatar = computed(() => avatar.value.startsWith('/api/avatar/'))
+
+async function onAvatarUpload(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+
+  // 前端预校验：类型 + 大小（与后端保持一致，避免撞 413 拿到空响应体）
+  if (!/^image\/(jpeg|png|gif|webp)$/i.test(file.type)) {
+    formError.value = '仅支持 JPG / PNG / GIF / WEBP 图片'
+    triggerShake()
+    e.target.value = ''
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    formError.value = '图片不能超过 2MB，请压缩后再上传'
+    triggerShake()
+    e.target.value = ''
+    return
+  }
+
+  const fd = new FormData()
+  fd.append('file', file)
+  uploading.value = true
+  try {
+    const res = await fetch('/api/avatar/upload', { method: 'POST', body: fd })
+    // 413（超出 tomcat/multipart 限制）等情况下响应体可能为空，直接 res.json() 会抛错
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.ok) {
+      formError.value =
+        data.message ||
+        (res.status === 413 ? '图片不能超过 2MB，请压缩后再上传' : '头像上传失败，请稍后重试')
+      triggerShake()
+    } else {
+      avatar.value = data.url
+      showToast('✅ 已使用自定义头像')
+    }
+  } catch {
+    formError.value = '网络异常：无法连接后端服务，请确认后端已启动'
+    triggerShake()
+  } finally {
+    uploading.value = false
+    e.target.value = ''
+  }
+}
 const submitting = ref(false)
 const sendingCode = ref(false)
 const shake = ref(false)
@@ -484,7 +568,7 @@ async function onSubmit() {
         : { username: username.value, password: password.value }
   } else {
     url = '/api/register'
-    body = { username: username.value, email: email.value, password: password.value }
+    body = { username: username.value, email: email.value, password: password.value, avatar: avatar.value }
   }
 
   try {
@@ -694,6 +778,71 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: var(--muted);
   margin-bottom: 24px;
+}
+
+/* 注册：头像选择 */
+.avatar-pick {
+  margin-bottom: 22px;
+  text-align: center;
+}
+.avatar-pick-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--forest-deep);
+  margin-bottom: 12px;
+}
+.avatar-opts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.avatar-opt {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 0;
+  border: 3px solid #f0e6d6;
+  background: #fffdf8;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.avatar-opt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-opt:hover {
+  transform: translateY(-2px);
+}
+.avatar-opt.active {
+  border-color: var(--forest);
+  box-shadow: 0 0 0 3px rgba(47, 125, 79, 0.18);
+}
+.avatar-opt.upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--muted);
+  position: relative;
+}
+.avatar-opt.upload.active {
+  color: var(--forest-deep);
+}
+.avatar-file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.avatar-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* 模式切换 Tab（含滑动指示条） */

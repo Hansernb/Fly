@@ -38,7 +38,7 @@ public class AuthServiceImpl implements AuthService {
             java.util.regex.Pattern.compile("^[a-zA-Z0-9_]{3,20}$");
 
     @Override
-    public User register(String username, String email, String password) {
+    public User register(String username, String email, String password, String avatar) {
         if (username == null || !USER_RE.matcher(username).matches())
             throw new BizException(400, "用户名 3-20 位，仅限字母/数字/下划线");
         if (email == null || !EMAIL_RE.matcher(email).matches())
@@ -57,6 +57,10 @@ public class AuthServiceImpl implements AuthService {
         u.setEmail(mail);
         u.setPassword(password);            // 明文存储（按需求，不加密）
         u.setPermission(PERM_DEFAULT);      // 注册用户一律默认权限 1
+        // 头像：仅接受两种合法形态（默认头像 / 上传头像），其余忽略，避免写入脏数据
+        if (isValidAvatar(avatar)) {
+            u.setAvatar(avatar);
+        }
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
         return u;
@@ -150,5 +154,28 @@ public class AuthServiceImpl implements AuthService {
         if (id == null)
             return null;
         return userMapper.selectById(id);
+    }
+
+    @Override
+    public void updateAvatar(Long userId, String avatar) {
+        User patch = new User();
+        patch.setId(userId);
+        patch.setAvatar(avatar);
+        // updateById 对 null 字段不更新，这里 avatar 可能被显式设为 ""，
+        // 而空串不是 null，会被正常写入。
+        userMapper.updateById(patch);
+    }
+
+    /**
+     * 头像地址合法性：只接受两种形态
+     * 1) 默认头像 /img/defaults/avatar-N.jpg
+     * 2) 上传头像 /api/avatar/{文件名}.jpg|png|gif|webp
+     * 含 .. 或反斜杠的一律拒绝，防止把穿越路径写进库
+     */
+    private boolean isValidAvatar(String avatar) {
+        if (avatar == null || avatar.isEmpty() || avatar.length() > 255) return false;
+        if (avatar.contains("..") || avatar.contains("\\")) return false;
+        if (avatar.matches("^/img/defaults/[\\w.-]+\\.(jpg|jpeg|png|gif|webp)$")) return true;
+        return avatar.matches("^/api/avatar/[\\w-]+\\.(jpg|jpeg|png|gif|webp)$");
     }
 }

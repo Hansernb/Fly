@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `boonie_user` (
   `email` varchar(128) NOT NULL COMMENT '登录邮箱',
   `password` varchar(128) NOT NULL COMMENT '登录密码（明文，按需求不加密）',
   `permission` int NOT NULL DEFAULT 1 COMMENT '权限：1=默认权限(注册用户)，0=管理员权限',
+  `avatar` varchar(255) DEFAULT NULL COMMENT '头像地址（默认 /img/defaults/avatar-N.jpg 或上传后 /api/avatar/文件名）',
   `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `email`(`email`)
@@ -52,6 +53,32 @@ SET @sql2 := IF(@has_pwd = 0 AND @has_hash = 1,
   'SELECT 1');
 PREPARE _st2 FROM @sql2; EXECUTE _st2; DEALLOCATE PREPARE _st2;
 
+-- ---------------------------- 迁移 3：新增 avatar 头像字段 ----------------------------
+SET @has_avatar := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_user' AND COLUMN_NAME = 'avatar'
+);
+SET @sql3 := IF(@has_avatar = 0,
+  'ALTER TABLE `boonie_user` ADD COLUMN `avatar` varchar(255) DEFAULT NULL COMMENT ''头像地址（默认 /img/defaults/avatar-N.jpg 或上传后 /api/avatar/文件名）'' AFTER `permission`',
+  'SELECT 1');
+PREPARE _st3 FROM @sql3; EXECUTE _st3; DEALLOCATE PREPARE _st3;
+
+-- 回填：历史用户 avatar 为空时，按 id 轮转分配 3 个默认头像（幂等，已有头像的不动）
+UPDATE `boonie_user`
+SET `avatar` = CONCAT('/img/defaults/avatar-', (MOD(`id` - 1, 3) + 1), '.jpg')
+WHERE `avatar` IS NULL OR `avatar` = '';
+
+-- ---------------------------- 迁移 4：评价头像字段扩容 ----------------------------
+-- 原 avatar 为 varchar(16)，只够存 emoji；用户真实头像需存图片 URL，故扩到 255
+SET @review_avatar_len := (
+  SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_review' AND COLUMN_NAME = 'avatar'
+);
+SET @sql4 := IF(@review_avatar_len IS NOT NULL AND @review_avatar_len < 255,
+  'ALTER TABLE `boonie_review` MODIFY COLUMN `avatar` varchar(255) NOT NULL DEFAULT ''🐻'' COMMENT ''评价人头像：varchar(255) 兼容 emoji 与图片 URL''',
+  'SELECT 1');
+PREPARE _st4 FROM @sql4; EXECUTE _st4; DEALLOCATE PREPARE _st4;
+
 -- ---------------------------- 游乐项目表 ----------------------------
 CREATE TABLE IF NOT EXISTS `boonie_attraction` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -70,7 +97,7 @@ CREATE TABLE IF NOT EXISTS `boonie_review` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `attraction_id` bigint NOT NULL COMMENT '所属项目',
   `reviewer_name` varchar(64) NOT NULL COMMENT '评价人昵称',
-  `avatar` varchar(16) NOT NULL DEFAULT '🐻' COMMENT '头像 emoji',
+  `avatar` varchar(255) NOT NULL DEFAULT '🐻' COMMENT '评价人头像：varchar(255) 兼容 emoji 与图片 URL',
   `rating` decimal(2, 1) NOT NULL COMMENT '评分 0-5（一位小数）',
   `review_date` date NOT NULL COMMENT '评价日期',
   `content` text NOT NULL COMMENT '评价内容',

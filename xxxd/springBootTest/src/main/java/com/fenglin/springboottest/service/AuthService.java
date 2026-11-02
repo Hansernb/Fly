@@ -4,8 +4,8 @@ import com.fenglin.springboottest.entity.User;
 
 public interface AuthService {
 
-    /** 注册：校验 -> 去重 -> 写入（密码明文；权限固定为默认权限 1） */
-    User register(String username, String email, String password);
+    /** 注册：校验 -> 去重 -> 写入（密码明文；权限固定为默认权限 1）；avatar 可为空 */
+    User register(String username, String email, String password, String avatar);
 
     /** 密码登录（明文比对） */
     User loginByPassword(String email, String password);
@@ -31,6 +31,9 @@ public interface AuthService {
 
     /** 校验令牌，返回对应 User，失败返回 null */
     User verifyToken(String token);
+
+    /** 更新指定用户的头像地址（仅写 avatar 字段，不动其他列） */
+    void updateAvatar(Long userId, String avatar);
 
     /** 判断该用户是否为管理员（permission == 0） */
     boolean isAdmin(User user);

@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### 上传目录（用户上传的头像等文件，不入库）###
+uploads/
+log/

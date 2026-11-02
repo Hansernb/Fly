@@ -47,7 +47,16 @@
         </button>
 
         <div class="nav-user">
-          <img class="nav-avatar" :src="DEFAULT_AVATAR" alt="我的头像" />
+          <button
+            class="avatar-btn"
+            type="button"
+            title="点击更换头像"
+            aria-label="更换头像"
+            @click="openAvatarPanel"
+          >
+            <img class="nav-avatar" :src="myAvatar" alt="我的头像" />
+            <span class="avatar-edit-dot">✎</span>
+          </button>
           <span class="hello">你好，{{ user.name }}</span>
           <button class="logout" type="button" @click="$emit('logout')">🚪 退出</button>
         </div>
@@ -69,6 +78,60 @@
         </nav>
       </transition>
     </header>
+
+    <!-- 头像设置弹层：普通用户可在这里更换自己的头像 -->
+    <transition name="avatar-pop">
+      <div v-if="avatarPanelOpen" class="avatar-mask" @click.self="closeAvatarPanel">
+        <div class="avatar-pop" role="dialog" aria-label="更换头像">
+          <div class="avatar-pop-head">
+            <h3>更换头像</h3>
+            <button class="avatar-pop-x" type="button" aria-label="关闭" @click="closeAvatarPanel">
+              ✕
+            </button>
+          </div>
+
+          <div class="avatar-pop-preview">
+            <img :src="draftAvatar" alt="预览头像" />
+            <p class="avatar-pop-hint">当前头像预览</p>
+          </div>
+
+          <p class="avatar-pop-label">选择一个默认头像</p>
+          <div class="avatar-pop-grid">
+            <button
+              v-for="a in defaultAvatars"
+              :key="a"
+              type="button"
+              class="avatar-choice"
+              :class="{ on: draftAvatar === a }"
+              @click="draftAvatar = a"
+            >
+              <img :src="a" alt="默认头像" />
+              <span v-if="draftAvatar === a" class="avatar-choice-tick">✓</span>
+            </button>
+          </div>
+
+          <label class="avatar-pop-upload">
+            <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" @change="onMyAvatarUpload" />
+            <span v-if="!uploadingAvatar">📤 上传本地图片（JPG/PNG/GIF/WEBP，≤2MB）</span>
+            <span v-else>上传中…</span>
+          </label>
+
+          <p v-if="avatarError" class="avatar-pop-err">{{ avatarError }}</p>
+
+          <div class="avatar-pop-actions">
+            <button class="avatar-pop-btn ghost" type="button" @click="closeAvatarPanel">取消</button>
+            <button
+              class="avatar-pop-btn primary"
+              type="button"
+              :disabled="savingAvatar || uploadingAvatar"
+              @click="saveMyAvatar"
+            >
+              {{ savingAvatar ? '保存中…' : '保存头像' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- 搜索栏 -->
     <section class="search-wrap">
@@ -628,7 +691,7 @@ async function submitReview() {
     const rev = await postReview({
       attractionId: Number(form.attractionId),
       name: props.user.name,
-      avatar: DEFAULT_AVATAR,
+      avatar: myAvatar.value,   // 用当前真实头像（含用户自己换过的），不再固定默认图
       rating: Number(form.rating),
       content: form.text
     })
@@ -678,7 +741,7 @@ async function submitDetailReview() {
     const rev = await postReview({
       attractionId: detail.value.id,
       name: props.user.name,
-      avatar: DEFAULT_AVATAR,
+      avatar: myAvatar.value,   // 同底部表单：用真实头像
       rating: Number(detailForm.rating),
       content: detailForm.text
     })
@@ -704,6 +767,108 @@ function showToast(msg) {
   toast.value = msg
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = ''), 3000)
+}
+
+/* ===================== 我的头像：查看 / 更换 ===================== */
+const defaultAvatars = [
+  '/img/defaults/avatar-1.jpg',
+  '/img/defaults/avatar-2.jpg',
+  '/img/defaults/avatar-3.jpg'
+]
+// 当前生效的头像：优先用「本地已保存的」，其次 props.user.avatar，最后默认图
+const localAvatar = ref('')
+const myAvatar = computed(() => localAvatar.value || props.user?.avatar || DEFAULT_AVATAR)
+
+const avatarPanelOpen = ref(false)
+const draftAvatar = ref('')
+const uploadingAvatar = ref(false)
+const savingAvatar = ref(false)
+const avatarError = ref('')
+
+function openAvatarPanel() {
+  draftAvatar.value = myAvatar.value
+  avatarError.value = ''
+  avatarPanelOpen.value = true
+}
+function closeAvatarPanel() {
+  if (savingAvatar.value || uploadingAvatar.value) return
+  avatarPanelOpen.value = false
+}
+
+async function onMyAvatarUpload(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  avatarError.value = ''
+
+  // 前端预校验，与后端保持一致
+  if (!/^image\/(jpeg|png|gif|webp)$/i.test(file.type)) {
+    avatarError.value = '仅支持 JPG / PNG / GIF / WEBP 图片'
+    e.target.value = ''
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    avatarError.value = '图片不能超过 2MB，请压缩后再上传'
+    e.target.value = ''
+    return
+  }
+
+  const fd = new FormData()
+  fd.append('file', file)
+  uploadingAvatar.value = true
+  try {
+    const res = await fetch('/api/avatar/upload', { method: 'POST', body: fd })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.ok) {
+      avatarError.value =
+        data.message || (res.status === 413 ? '图片不能超过 2MB，请压缩后再上传' : '上传失败，请重试')
+    } else {
+      draftAvatar.value = data.url
+    }
+  } catch {
+    avatarError.value = '网络异常：无法连接后端服务'
+  } finally {
+    uploadingAvatar.value = false
+    e.target.value = ''
+  }
+}
+
+async function saveMyAvatar() {
+  if (savingAvatar.value) return
+  avatarError.value = ''
+  savingAvatar.value = true
+  try {
+    const res = await fetch('/api/me/avatar', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + props.token
+      },
+      body: JSON.stringify({ avatar: draftAvatar.value })
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.ok) {
+      avatarError.value = data.message || '保存失败，请稍后重试'
+      return
+    }
+    localAvatar.value = (data.user && data.user.avatar) || draftAvatar.value
+    // 同步到 localStorage，刷新页面也能保持
+    try {
+      const raw = localStorage.getItem('boonie_user')
+      if (raw) {
+        const u = JSON.parse(raw)
+        u.avatar = localAvatar.value
+        localStorage.setItem('boonie_user', JSON.stringify(u))
+      }
+    } catch {
+      /* 本地存储不可用时忽略 */
+    }
+    showToast('✅ 头像已更新')
+    avatarPanelOpen.value = false
+  } catch {
+    avatarError.value = '网络异常：无法连接后端服务'
+  } finally {
+    savingAvatar.value = false
+  }
 }
 
 /* ===================== 生命周期 / 导航 / 搜索（保留原逻辑） ===================== */
@@ -1199,6 +1364,232 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   border: 2px solid var(--wood-light);
   background: #f2f9ef;
   flex: 0 0 34px;
+}
+
+/* 可点击的头像按钮（悬停浮起 + 右下角编辑角标） */
+.avatar-btn {
+  position: relative;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 50%;
+  transition: transform 0.18s ease;
+}
+.avatar-btn:hover {
+  transform: translateY(-1px) scale(1.05);
+}
+.avatar-btn:hover .nav-avatar {
+  border-color: var(--leaf, #7fb069);
+  box-shadow: 0 4px 12px rgba(63, 110, 60, 0.25);
+}
+.avatar-edit-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--leaf, #7fb069);
+  color: #fff;
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+  border: 2px solid #fff;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: all 0.18s ease;
+}
+.avatar-btn:hover .avatar-edit-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ===== 头像设置弹层 ===== */
+.avatar-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(38, 56, 34, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.avatar-pop {
+  width: min(400px, 100%);
+  background: #fffdf7;
+  border: 2px solid var(--wood-light);
+  border-radius: 18px;
+  padding: 18px 20px 20px;
+  box-shadow: 0 20px 50px rgba(38, 56, 34, 0.28);
+}
+.avatar-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.avatar-pop-head h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--forest-deep, #2f4d2a);
+}
+.avatar-pop-x {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--muted, #8a8f7e);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.avatar-pop-x:hover {
+  background: #f0e6d6;
+}
+.avatar-pop-preview {
+  text-align: center;
+  margin: 6px 0 14px;
+}
+.avatar-pop-preview img {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--wood-light);
+  background: #f2f9ef;
+}
+.avatar-pop-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted, #8a8f7e);
+}
+.avatar-pop-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text, #3b4a33);
+}
+.avatar-pop-grid {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.avatar-choice {
+  position: relative;
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  transition: all 0.16s ease;
+}
+.avatar-choice img {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f2f9ef;
+}
+.avatar-choice:hover {
+  transform: translateY(-2px);
+}
+.avatar-choice.on {
+  border-color: var(--leaf, #7fb069);
+  box-shadow: 0 4px 12px rgba(63, 110, 60, 0.25);
+}
+.avatar-choice-tick {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--leaf, #7fb069);
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid #fff;
+}
+.avatar-pop-upload {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  border: 2px dashed var(--wood-light, #d8c9ad);
+  border-radius: 12px;
+  font-size: 12.5px;
+  color: var(--text, #3b4a33);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.avatar-pop-upload:hover {
+  border-color: var(--leaf, #7fb069);
+  background: #f6fbf3;
+}
+.avatar-pop-upload input {
+  display: none;
+}
+.avatar-pop-err {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: #c0392b;
+  text-align: center;
+}
+.avatar-pop-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.avatar-pop-btn {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.16s ease;
+}
+.avatar-pop-btn.ghost {
+  background: transparent;
+  border-color: var(--wood-light, #d8c9ad);
+  color: var(--muted, #8a8f7e);
+}
+.avatar-pop-btn.ghost:hover {
+  background: #f0e6d6;
+}
+.avatar-pop-btn.primary {
+  background: var(--leaf, #7fb069);
+  color: #fff;
+  border-color: var(--leaf, #7fb069);
+}
+.avatar-pop-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.avatar-pop-btn.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.avatar-pop-enter-active,
+.avatar-pop-leave-active {
+  transition: opacity 0.18s ease;
+}
+.avatar-pop-enter-active .avatar-pop,
+.avatar-pop-leave-active .avatar-pop {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.avatar-pop-enter-from,
+.avatar-pop-leave-to {
+  opacity: 0;
+}
+.avatar-pop-enter-from .avatar-pop,
+.avatar-pop-leave-to .avatar-pop {
+  transform: scale(0.92) translateY(8px);
 }
 .hello {
   font-size: 14px;

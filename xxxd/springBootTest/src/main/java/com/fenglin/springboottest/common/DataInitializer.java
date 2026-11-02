@@ -34,9 +34,9 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         if (userMapper.selectCount(null) == 0) {
-            // 熊大 = 管理员权限(0)，熊二 = 默认权限(1)；密码明文存储
-            insertUser("熊大", "admin@boonie.com", "bear123456", 0);
-            insertUser("熊二", "bear2@boonie.com", "bear123456", 1);
+            // 熊大 = 管理员权限(0)，熊二 = 默认权限(1)；密码明文存储；各分配一个默认头像
+            insertUser("熊大", "admin@boonie.com", "bear123456", 0, "/img/defaults/avatar-1.jpg");
+            insertUser("熊二", "bear2@boonie.com", "bear123456", 1, "/img/defaults/avatar-2.jpg");
             System.out.println("🌲 已初始化种子用户：熊大(管理员) / 熊二（密码 bear123456，明文）");
         }
         if (attractionMapper.selectCount(null) == 0) {
@@ -74,11 +74,16 @@ public class DataInitializer implements ApplicationRunner {
 
     /** permission：1 = 默认权限（普通注册用户），0 = 管理员权限 */
     private void insertUser(String name, String email, String pwd, int permission) {
+        insertUser(name, email, pwd, permission, null);
+    }
+
+    private void insertUser(String name, String email, String pwd, int permission, String avatar) {
         User u = new User();
         u.setName(name);
         u.setEmail(email);
         u.setPassword(pwd);            // 明文存储（按需求，不加密）
         u.setPermission(permission);
+        u.setAvatar(avatar);
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
     }

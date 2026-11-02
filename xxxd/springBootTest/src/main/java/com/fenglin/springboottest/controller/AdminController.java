@@ -1,6 +1,7 @@
 package com.fenglin.springboottest.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fenglin.springboottest.common.AvatarStorage;
 import com.fenglin.springboottest.common.BizException;
 import com.fenglin.springboottest.entity.Attraction;
 import com.fenglin.springboottest.entity.Review;
@@ -36,6 +37,8 @@ public class AdminController {
     private ReviewMapper reviewMapper;
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private AvatarStorage avatarStorage;
 
     /** 统一鉴权：必须是管理员 */
     private User requireAdmin(String authHeader) {
@@ -179,6 +182,23 @@ public class AdminController {
         return ok(id);
     }
 
+    /**
+     * POST /api/admin/avatars/clean —— 手动清理头像孤儿文件。
+     * 定时任务每天 3:10 会自动跑一次；这里提供给管理员按需触发
+     * （比如刚发现磁盘占用异常，不想等到凌晨）。
+     */
+    @PostMapping("/avatars/clean")
+    public Map<String, Object> cleanAvatarOrphans(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        int removed = avatarStorage.cleanOrphans();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ok", true);
+        m.put("removed", removed);
+        m.put("message", removed > 0 ? "已清理 " + removed + " 个孤儿文件" : "没有需要清理的文件");
+        return m;
+    }
+
     // ==================== 用户与权限管理 ====================
 
     /** GET /api/admin/users —— 用户列表（不返回密码） */
@@ -193,6 +213,7 @@ public class AdminController {
             m.put("name", u.getName());
             m.put("email", u.getEmail());
             m.put("permission", u.getPermission() == null ? 1 : u.getPermission());
+            m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
             m.put("createdAt", u.getCreatedAt() != null ? u.getCreatedAt().toString() : "");
             list.add(m);
         }
@@ -225,13 +246,32 @@ public class AdminController {
                 throw new BizException(400, "新密码至少 6 位");
             u.setPassword(np);   // 明文
         }
+        String oldAvatar = u.getAvatar();
+        if (body.containsKey("avatar")) {
+            String av = str(body.get("avatar"));
+            // 只接受两种合法形态：默认头像 /img/defaults/xxx.jpg，或上传头像 /api/avatar/文件名
+            // 含 .. 或反斜杠的一律拒绝，避免把穿越路径写进库
+            boolean ok = av == null || av.isEmpty()
+                    || (av.startsWith("/img/defaults/") && av.matches("^/img/defaults/[\\w.-]+\\.(jpg|jpeg|png|gif|webp)$"))
+                    || (avatarStorage.filenameOf(av) != null);
+            if (!ok)
+                throw new BizException(400, "头像地址不合法");
+            u.setAvatar(av == null ? "" : av);
+        }
         userMapper.updateById(u);
+
+        // 头像确实变了才清理旧文件；且仅当它不再被任何用户/评价引用时才真正删除
+        String newAvatar = u.getAvatar();
+        if (!java.util.Objects.equals(oldAvatar, newAvatar)) {
+            avatarStorage.deleteIfUnreferenced(oldAvatar);
+        }
 
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", u.getId());
         m.put("name", u.getName());
         m.put("email", u.getEmail());
         m.put("permission", u.getPermission());
+        m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
         return ok(m);
     }
 

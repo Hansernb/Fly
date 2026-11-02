@@ -101,6 +101,7 @@
                 <td class="col-idx">{{ i + 1 }}</td>
                 <td v-for="c in current.columns" :key="c.key">
                   <span v-if="c.type === 'color'" class="dot" :style="{ background: row[c.key] }"></span>
+                  <img v-else-if="c.type === 'avatar'" class="tbl-avatar" :src="row[c.key] || defaultAvatar" :alt="c.label" />
                   <span v-else>{{ display(row, c) }}</span>
                 </td>
                 <td class="col-switch">
@@ -142,7 +143,36 @@
           <label v-for="c in current.columns" :key="c.key" class="fld">
             <span class="fld-label">{{ c.label }}</span>
 
-            <select v-if="c.type === 'select'" v-model="form[c.key]" class="fld-input">
+            <template v-if="c.type === 'avatar'">
+              <div class="avatar-edit">
+                <img class="avatar-edit-prev" :src="form[c.key] || defaultAvatar" alt="头像预览" />
+                <div class="avatar-edit-opts">
+                  <button
+                    v-for="(a, i) in defaultAvatars"
+                    :key="i"
+                    type="button"
+                    class="avatar-edit-opt"
+                    :class="{ active: form[c.key] === a }"
+                    @click="form[c.key] = a"
+                  >
+                    <img :src="a" alt="默认头像" />
+                  </button>
+                  <label class="avatar-edit-opt upload" :class="{ active: isUploadedAvatar(form[c.key]) }">
+                    <span>＋</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="avatar-edit-file"
+                      :disabled="uploadingAvatar"
+                      @change="onAdminAvatarUpload($event, c.key)"
+                    />
+                  </label>
+                </div>
+                <span v-if="uploadingAvatar" class="avatar-edit-hint">上传中…</span>
+              </div>
+            </template>
+
+            <select v-else-if="c.type === 'select'" v-model="form[c.key]" class="fld-input">
               <option v-for="o in c.options" :key="o.value ?? o" :value="o.value ?? o">
                 {{ o.label ?? o }}
               </option>
@@ -192,6 +222,34 @@ const props = defineProps({
   token: { type: String, default: '' }
 })
 const emit = defineEmits(['exit'])
+
+/* ===================== 头像（默认头像 + 上传） ===================== */
+const defaultAvatar = '/img/avatar.jpg'
+const defaultAvatars = [
+  '/img/defaults/avatar-1.jpg',
+  '/img/defaults/avatar-2.jpg',
+  '/img/defaults/avatar-3.jpg'
+]
+const uploadingAvatar = ref(false)
+function isUploadedAvatar(v) {
+  return typeof v === 'string' && v.startsWith('/api/avatar/')
+}
+async function uploadAvatar(file) {
+  // 前端预校验：与后端保持一致，避免撞 413 时拿到空响应体导致报错信息不明确
+  if (!/^image\/(jpeg|png|gif|webp)$/i.test(file.type)) throw new Error('仅支持 JPG / PNG / GIF / WEBP 图片')
+  if (file.size > 2 * 1024 * 1024) throw new Error('图片不能超过 2MB，请压缩后再上传')
+
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch('/api/avatar/upload', { method: 'POST', body: fd })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.ok) {
+    throw new Error(
+      data.message || (res.status === 413 ? '图片不能超过 2MB，请压缩后再上传' : '头像上传失败')
+    )
+  }
+  return data.url
+}
 
 /* ===================== 模块配置（9 个菜单） ===================== */
 const SECTIONS = [
@@ -334,9 +392,10 @@ const SECTIONS = [
     key: 'settings',
     name: '管理员设置',
     icon: '👤',
-    desc: '查看并调整账号权限（对接后端用户接口）',
+    desc: '查看并调整账号权限、头像等（对接后端用户接口）',
     api: '/api/admin/users',
     columns: [
+      { key: 'avatar', label: '头像', type: 'avatar' },
       { key: 'name', label: '账号', type: 'text' },
       { key: 'email', label: '邮箱', type: 'text' },
       {
@@ -454,6 +513,22 @@ function openEdit(row) {
 }
 function closeForm() {
   editing.value = null
+}
+
+async function onAdminAvatarUpload(e, key) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  uploadingAvatar.value = true
+  try {
+    const url = await uploadAvatar(file)
+    form[key] = url
+    flash('头像已选择，点「保存」生效')
+  } catch (err) {
+    flash(err.message || '头像上传失败', 'err')
+  } finally {
+    uploadingAvatar.value = false
+    e.target.value = ''
+  }
 }
 function toggleFormEnabled() {
   form.enabled = form.enabled === false
@@ -1047,5 +1122,76 @@ onMounted(load)
   .side-item {
     justify-content: center;
   }
+}
+
+/* ================= 头像（表格 + 编辑弹窗） ================= */
+.tbl-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #e6ebe6;
+  vertical-align: middle;
+}
+.avatar-edit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.avatar-edit-prev {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e8c46a;
+  flex-shrink: 0;
+}
+.avatar-edit-opts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.avatar-edit-opt {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid #dfe5df;
+  background: #fffdf8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #8b9a90;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.avatar-edit-opt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-edit-opt.active {
+  border-color: #e8c46a;
+  box-shadow: 0 0 0 3px rgba(232, 196, 106, 0.25);
+}
+.avatar-edit-opt.upload {
+  position: relative;
+}
+.avatar-edit-file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.avatar-edit-hint {
+  width: 100%;
+  font-size: 11px;
+  color: #8b9a90;
 }
 </style>
