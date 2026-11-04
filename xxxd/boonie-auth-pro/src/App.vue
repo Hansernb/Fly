@@ -1,4 +1,7 @@
 <template>
+  <!-- 熊出没角色合影氛围背景（高斯模糊 + 压暗40% + 半透明浅绿蒙版，纯底纹不参与交互） -->
+  <div class="bg-scene" aria-hidden="true"></div>
+
   <!-- 权限拦截提示（如：默认权限用户尝试进入后台） -->
   <Transition name="toast">
     <div v-if="toast" class="app-toast" role="status">{{ toast }}</div>
@@ -15,6 +18,12 @@
   <!-- 后台登录页（仅登录，无注册） -->
   <AdminLogin v-else-if="view === 'adminLogin'" @success="onAdminLogin" @back="goHome" />
 
+  <!-- 游乐项目列表页（独立路由） -->
+  <AttractionList v-else-if="view === 'attractions'" @back="goHome" />
+
+  <!-- 园区手绘地图页（独立路由） -->
+  <ParkMap v-else-if="view === 'map'" @back="goHome" />
+
   <!-- 已登录：进入森林游乐园主页 -->
   <ParkHome
     v-else-if="session"
@@ -22,6 +31,7 @@
     :token="session.token"
     @logout="onLogout"
     @admin="enterAdminLogin"
+    @attractions="enterAttractions"
   />
 
   <!-- 未登录：森林登录 / 注册页 -->
@@ -38,10 +48,12 @@ import AuthCard from './components/AuthCard.vue'
 import ParkHome from './components/ParkHome.vue'
 import AdminLogin from './components/AdminLogin.vue'
 import AdminPanel from './components/AdminPanel.vue'
+import AttractionList from './components/AttractionList.vue'
+import ParkMap from './components/ParkMap.vue'
 
 const session = ref(null)      // 前台会话 { user, token }
 const adminSession = ref(null) // 后台会话 { user, token }
-const view = ref('home')       // home | adminLogin | admin
+const view = ref('home')       // home | adminLogin | admin | attractions | map
 const toast = ref('')          // 权限拦截提示文案
 
 /**
@@ -83,9 +95,11 @@ function showToast(msg) {
 const ROUTES = [
   { path: '/', view: 'home' },
   { path: '/admin/login', view: 'adminLogin' },
-  { path: '/admin', view: 'admin' }
+  { path: '/admin', view: 'admin' },
+  { path: '/attractions', view: 'attractions' },
+  { path: '/map', view: 'map' }
 ]
-const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin' }
+const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map' }
 
 function go(path, viewName) {
   if (location.pathname !== path) {
@@ -180,6 +194,16 @@ function onAdminLogin(payload) {
   go('/admin', 'admin')
 }
 
+/** 首页导航「项目大全」→ 进入游乐项目列表页 */
+function enterAttractions() {
+  go('/attractions', 'attractions')
+}
+
+/** 首页导航「园区地图」→ 进入手绘地图页 */
+function enterMap() {
+  go('/map', 'map')
+}
+
 /** 退出后台，回到首页（保留前台会话） */
 function exitAdmin() {
   localStorage.removeItem('boonie_admin_token')
@@ -200,6 +224,27 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 全屏氛围底纹：熊出没角色合影
+   —— 高斯模糊 16px + brightness(0.6) 压暗40% + 浅绿半透明蒙版，
+      放大 6% 遮住模糊边缘；z-index 压到最底层，前景卡片/文字不受影响 */
+.bg-scene {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: url("/img/boonie-cast.webp") center center / cover no-repeat;
+  filter: blur(6px) brightness(0.6) saturate(1.08);
+  transform: scale(1.06);
+  pointer-events: none;
+}
+/* 半透明浅绿蒙版：压住照片杂色，统一成卡通游乐园的清新绿基调 */
+.bg-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(140, 226, 168, 0.22) 0%, rgba(96, 200, 130, 0.3) 60%, rgba(60, 160, 100, 0.34) 100%);
+}
+
 .auth-page {
   display: flex;
   min-height: 100vh;

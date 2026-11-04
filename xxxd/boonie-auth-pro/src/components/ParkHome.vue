@@ -175,6 +175,53 @@
       </div>
     </section>
 
+    <!-- 热门项目轮播 Banner：自动切换 + 左右手动 + 底部指示器 -->
+    <section
+      class="banner reveal"
+      aria-roledescription="carousel"
+      @mouseenter="stopBanner"
+      @mouseleave="startBanner"
+    >
+      <div
+        class="banner-track"
+        :style="{ transform: 'translateX(-' + bIndex * 100 + '%)' }"
+      >
+        <div
+          v-for="(s, i) in bannerSlides"
+          :key="i"
+          class="banner-slide"
+          :aria-hidden="i !== bIndex"
+        >
+          <img class="banner-img" :src="s.img" :alt="s.title" loading="lazy" />
+          <div class="banner-shade"></div>
+          <div class="banner-caption">
+            <span class="banner-tag">{{ s.tag }}</span>
+            <h3>{{ s.title }}</h3>
+            <p>{{ s.desc }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 左右切换 -->
+      <button class="banner-arrow prev" type="button" aria-label="上一张" @click="prevBanner">‹</button>
+      <button class="banner-arrow next" type="button" aria-label="下一张" @click="nextBanner">›</button>
+
+      <!-- 底部指示器 -->
+      <div class="banner-dots" role="tablist">
+        <button
+          v-for="(s, i) in bannerSlides"
+          :key="i"
+          class="banner-dot"
+          :class="{ on: i === bIndex }"
+          type="button"
+          role="tab"
+          :aria-selected="i === bIndex"
+          :aria-label="'第 ' + (i + 1) + ' 张：' + s.title"
+          @click="goBanner(i)"
+        ></button>
+      </div>
+    </section>
+
     <!-- 主视觉横幅 -->
     <section class="hero">
       <span class="hero-blob b1" aria-hidden="true"></span>
@@ -269,49 +316,11 @@
     </section>
 
     <!-- 森林栖息地 -->
-    <section id="habitats" class="section reveal">
-      <h2 class="section-title">🦉 森林栖息地 · 和小动物们打个招呼</h2>
-      <div v-if="filteredHabitats.length" class="grid">
-        <article
-          v-for="h in filteredHabitats"
-          :key="h.name"
-          class="habitat"
-          :style="{ '--accent': h.color }"
-        >
-          <div class="habitat-cover">
-            <img :src="h.img || FALLBACK_IMG" :alt="h.name" loading="lazy" />
-            <span class="habitat-badge">{{ h.emoji }}</span>
-          </div>
-          <h3>{{ h.name }}</h3>
-          <p>{{ h.desc }}</p>
-          <div class="habitat-meta">
-            <span class="resident">🏡 居民：{{ h.residents }}</span>
-            <span class="mood">{{ h.mood }}</span>
-          </div>
-          <div class="ride-rate">
-            <StarRating :score="h.rating" :size="15" />
-            <span class="rate-num">{{ h.rating.toFixed(1) }}</span>
-          </div>
-        </article>
-      </div>
-      <div v-else class="empty">🍃 没有匹配的栖息地，换个关键词试试？</div>
-    </section>
+    <!-- 动物栖息地介绍卡片列表 -->
+    <HabitatCards />
 
-    <!-- 演出时间表 -->
-    <section id="shows" class="section reveal">
-      <h2 class="section-title">🎪 今日森林演出</h2>
-      <div v-if="filteredShows.length" class="shows">
-        <div v-for="s in filteredShows" :key="s.time" class="show">
-          <div class="show-time">{{ s.time }}</div>
-          <div class="show-info">
-            <h3>{{ s.emoji }} {{ s.name }}</h3>
-            <p>{{ s.place }}</p>
-          </div>
-          <span class="show-tag">{{ s.tag }}</span>
-        </div>
-      </div>
-      <div v-else class="empty">🍃 没有匹配的演出，换个关键词试试？</div>
-    </section>
+    <!-- 演出时间表（上午 / 下午 / 晚上 分场次 + 预约） -->
+    <ShowSchedule />
 
     <!-- 门票 -->
     <section id="tickets" class="section reveal">
@@ -451,6 +460,24 @@
       >
     </div>
 
+    <!-- 园区实时环境数据卡片 -->
+    <section class="data-cards reveal">
+      <h2 class="section-title">🌿 园区实时环境数据</h2>
+      <div class="data-grid">
+        <div v-for="d in liveData" :key="d.label" class="data-card">
+          <span class="data-icon" aria-hidden="true">{{ d.icon }}</span>
+          <div class="data-value">{{ d.value }}</div>
+          <div class="data-label">{{ d.label }}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 园区手绘地图（内嵌首页，标记点由项目数据生成） -->
+    <section id="map" class="section reveal">
+      <h2 class="section-title">🗺️ 园区手绘地图</h2>
+      <ParkMap embedded />
+    </section>
+
     <footer class="footer">
       🌲 狗熊岭森林游乐园 · 和熊大熊二一起守护森林 · 营业时间 09:00 - 21:00
     </footer>
@@ -534,12 +561,15 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import StarRating from './StarRating.vue'
 import { attractionsDB } from '../data/attractions.js'
+import ParkMap from './ParkMap.vue'
+import ShowSchedule from './ShowSchedule.vue'
+import HabitatCards from './HabitatCards.vue'
 
 const props = defineProps({
   user: { type: Object, required: true },
   token: { type: String, required: true }
 })
-const emit = defineEmits(['logout', 'admin'])
+const emit = defineEmits(['logout', 'admin', 'attractions'])
 
 /* 仅管理员（permission === 0）才显示「后台管理系统」入口 */
 const isAdmin = computed(() => Number(props.user?.permission) === 0)
@@ -871,6 +901,48 @@ async function saveMyAvatar() {
   }
 }
 
+/* ===================== 热门项目轮播 Banner ===================== */
+const bannerSlides = [
+  { img: '/img/ferris.jpeg', tag: '🎡 招牌项目', title: '森林摩天轮', desc: '360° 俯瞰整片狗熊岭林海，黄昏时最浪漫。' },
+  { img: '/img/coaster.gif', tag: '🎢 尖叫首选', title: '林海过山车', desc: '穿梭树冠间的极速轨道，熊二都直呼过瘾！' },
+  { img: '/img/rafting.jpeg', tag: '🛶 清凉一夏', title: '激流勇进漂流', desc: '顺溪而下穿越原始森林，全程水花四溅。' },
+  { img: '/img/train.jpeg', tag: '🚂 全家同游', title: '小熊观光火车', desc: '慢悠悠绕园一圈，熊大熊二沿途陪你打招呼。' }
+]
+const bIndex = ref(0)
+let bannerTimer = null
+function startBanner() {
+  stopBanner()
+  bannerTimer = setInterval(() => {
+    bIndex.value = (bIndex.value + 1) % bannerSlides.length
+  }, 4000)
+}
+function stopBanner() {
+  if (bannerTimer) {
+    clearInterval(bannerTimer)
+    bannerTimer = null
+  }
+}
+function nextBanner() {
+  bIndex.value = (bIndex.value + 1) % bannerSlides.length
+  startBanner()
+}
+function prevBanner() {
+  bIndex.value = (bIndex.value - 1 + bannerSlides.length) % bannerSlides.length
+  startBanner()
+}
+function goBanner(i) {
+  bIndex.value = i
+  startBanner()
+}
+
+/* ===================== 园区实时环境数据 ===================== */
+const liveData = [
+  { icon: '🌳', value: '92%', label: '绿化率' },
+  { icon: '🦌', value: '36 种', label: '物种' },
+  { icon: '🍃', value: '5800 个/cm³', label: '负氧离子' },
+  { icon: '🌡️', value: '22℃', label: '温度' }
+]
+
 /* ===================== 生命周期 / 导航 / 搜索（保留原逻辑） ===================== */
 onMounted(async () => {
   try {
@@ -889,6 +961,7 @@ onMounted(async () => {
   setupScrollSpy()
   setupReveal()
   loadScenery()
+  startBanner()
   window.addEventListener('keydown', onKeydown)
 })
 
@@ -897,6 +970,7 @@ onBeforeUnmount(() => {
   if (revealObserver) revealObserver.disconnect()
   window.removeEventListener('keydown', onKeydown)
   clearTimeout(toastTimer)
+  stopBanner()
   document.body.style.overflow = ''
 })
 
@@ -950,6 +1024,8 @@ function setupReveal() {
 // 导航菜单（锚点滚动）
 const menus = [
   { id: 'attractions', label: '游乐项目', icon: '🎡' },
+  { id: 'all-attractions', label: '项目大全', icon: '🎠' },
+  { id: 'map', label: '园区地图', icon: '🗺️' },
   { id: 'habitats', label: '栖息地', icon: '🦉' },
   { id: 'shows', label: '演出', icon: '🎪' },
   { id: 'tickets', label: '门票', icon: '🎫' },
@@ -962,6 +1038,11 @@ const menuOpen = ref(false)
 function goSection(id) {
   activeMenu.value = id
   menuOpen.value = false
+  // 「项目大全」跳转到独立页面，其余菜单项（含园区地图）页内平滑滚动
+  if (id === 'all-attractions') {
+    emit('attractions')
+    return
+  }
   const el = document.getElementById(id)
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -3266,5 +3347,179 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   .rate-big { border-right: none; border-bottom: 2px dashed var(--wood-light); padding-right: 0; padding-bottom: 16px; }
   .modal-hero { flex-direction: column; text-align: center; }
   .modal-tags, .modal-rate { justify-content: center; }
+}
+
+/* ============ 热门项目轮播 Banner ============ */
+.banner {
+  position: relative;
+  margin: 20px 24px 0;
+  border-radius: calc(var(--radius) + 8px);
+  overflow: hidden;
+  box-shadow: 0 20px 50px -20px rgba(31, 92, 57, 0.55);
+  height: 340px;
+  background: var(--forest-deep);
+}
+.banner-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.banner-slide {
+  position: relative;
+  flex: 0 0 100%;
+  height: 100%;
+}
+.banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.banner-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(20, 40, 25, 0.66) 0%, rgba(20, 40, 25, 0.28) 45%, transparent 75%);
+  pointer-events: none;
+}
+.banner-caption {
+  position: absolute;
+  left: 40px;
+  bottom: 44px;
+  right: 30%;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+.banner-tag {
+  display: inline-block;
+  background: linear-gradient(180deg, #ffc83d 0%, var(--honey) 100%);
+  color: #5a3d00;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 5px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.banner-caption h3 {
+  font-size: 30px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+.banner-caption p {
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.94;
+  max-width: 520px;
+}
+.banner-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.banner-arrow:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-50%) scale(1.08);
+}
+.banner-arrow.prev { left: 18px; }
+.banner-arrow.next { right: 18px; }
+.banner-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 3;
+}
+.banner-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.banner-dot.on {
+  width: 28px;
+  border-radius: 999px;
+  background: var(--honey);
+  border-color: var(--honey);
+}
+
+/* ============ 园区实时环境数据卡片 ============ */
+.data-cards {
+  margin: 36px 24px 0;
+}
+.data-cards .section-title {
+  margin-bottom: 16px;
+}
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.data-card {
+  background: #fff;
+  border: 2px solid var(--wood-light);
+  border-radius: var(--radius);
+  padding: 22px 18px;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(47, 125, 79, 0.1);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.data-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 36px rgba(47, 125, 79, 0.18);
+}
+.data-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(176, 224, 168, 0.4), rgba(76, 175, 109, 0.18));
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+.data-value {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--forest-deep);
+  line-height: 1.1;
+}
+.data-label {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* 窄屏适配 */
+@media (max-width: 720px) {
+  .banner { height: 260px; }
+  .banner-caption { left: 22px; right: 18px; bottom: 50px; }
+  .banner-caption h3 { font-size: 22px; }
+  .banner-caption p { font-size: 13px; }
+  .data-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

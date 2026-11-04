@@ -25,6 +25,8 @@ export const attractionsDB = [
     tag: '刺激',
     wait: 25,
     color: '#e4572e',
+    category: '刺激',
+    height: '130cm 以上',
     rating: 4.8,
     reviews: [
       { id: 101, name: '熊大粉丝', avatar: '🐻', rating: 5, date: '2026-10-08', text: '太刺激了！熊大熊二就在旁边加油，孩子们玩得不想走。' },
@@ -40,6 +42,8 @@ export const attractionsDB = [
     tag: '浪漫',
     wait: 15,
     color: '#7c5cbf',
+    category: '观光',
+    height: '100cm 以上',
     rating: 4.6,
     reviews: [
       { id: 103, name: '仰望星空的猫', avatar: '🐱', rating: 4, date: '2026-10-07', text: '傍晚坐上去看日落特别美，就是风有点大。' },
@@ -55,6 +59,8 @@ export const attractionsDB = [
     tag: '亲子',
     wait: 10,
     color: '#2f7d4f',
+    category: '亲子',
+    height: '90cm 以上',
     rating: 4.9,
     reviews: [
       { id: 105, name: '亲子妈妈', avatar: '🐰', rating: 5, date: '2026-10-03', text: '超适合带娃，吉吉国王还会挥手，女儿玩得超开心！' },
@@ -70,6 +76,8 @@ export const attractionsDB = [
     tag: '清凉',
     wait: 30,
     color: '#ffb703',
+    category: '观光',
+    height: '110cm 以上',
     rating: 4.7,
     reviews: [
       { id: 107, name: '甜筒熊', avatar: '🐻', rating: 4, date: '2026-10-06', text: '夏天玩太爽了，就是排队有点久。' },
@@ -85,6 +93,8 @@ export const attractionsDB = [
     tag: '益智',
     wait: 8,
     color: '#a9743c',
+    category: '亲子',
+    height: '90cm 以上',
     rating: 4.5,
     reviews: [
       { id: 109, name: '迷宫王', avatar: '🧩', rating: 3, date: '2026-10-01', text: '有点绕，小朋友偶尔会急，建议大人陪同。' },
@@ -100,6 +110,8 @@ export const attractionsDB = [
     tag: '刺激',
     wait: 40,
     color: '#2a9d8f',
+    category: '刺激',
+    height: '120cm 以上',
     rating: 4.8,
     reviews: [
       { id: 111, name: '浪里白条', avatar: '🐬', rating: 5, date: '2026-10-04', text: '落差超带感，下来全身湿透但超爽！' },

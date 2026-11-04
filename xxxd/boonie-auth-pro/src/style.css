@@ -30,14 +30,9 @@ body {
   -webkit-font-smoothing: antialiased;
   position: relative;
   z-index: 0;
-  /* 森林主题背景：晨光光斑 + 树冠层渐变 + 林间雾气 */
-  background:
-    radial-gradient(ellipse 55% 40% at 18% 8%, rgba(255, 224, 130, 0.35) 0, transparent 65%),
-    radial-gradient(ellipse 45% 35% at 85% 12%, rgba(139, 213, 158, 0.4) 0, transparent 65%),
-    radial-gradient(ellipse 70% 45% at 50% 110%, rgba(47, 125, 79, 0.14) 0, transparent 70%),
-    linear-gradient(180deg, #d9efdd 0%, #ecf6e9 32%, var(--cream) 68%, #f4edda 100%);
-  background-size: 160% 160%, 160% 160%, 100% 100%, 100% 100%;
-  animation: bgShift 16s ease-in-out infinite;
+  /* 底层大背景已换成熊出没角色合影（见 App.vue 的 .bg-scene：高斯模糊 + 压暗40% + 浅绿蒙版）。
+     body 这里只保留同色系深绿兜底色，图片加载失败时也不刺眼 */
+  background: linear-gradient(180deg, #2b4a35 0%, #24402e 55%, #1d3325 100%);
 }
 
 /* 底部森林剪影（远山树影，固定不滚动） */
