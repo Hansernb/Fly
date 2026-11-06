@@ -1,5 +1,6 @@
 package com.fenglin.springboottest.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fenglin.springboottest.entity.Habitat;
 import com.fenglin.springboottest.entity.Show;
 import com.fenglin.springboottest.entity.Ticket;
@@ -70,23 +71,35 @@ public class ContentController {
         return ok(list);
     }
 
-    /** GET /api/tickets —— 门票列表（features 由按行文本转成数组） */
+    /** GET /api/tickets —— 门票列表（features 由按行文本转成数组，按 sort_no 排序，仅上架） */
     @GetMapping("/tickets")
     public Map<String, Object> tickets() {
+        QueryWrapper<Ticket> qw = new QueryWrapper<>();
+        qw.eq("enabled", 1).orderByAsc("sort_no", "id");
         List<Map<String, Object>> list = new ArrayList<>();
-        for (Ticket t : ticketMapper.selectList(null)) {
+        for (Ticket t : ticketMapper.selectList(qw)) {
             list.add(ticketMap(t));
         }
         return ok(list);
     }
 
-    /** 门票统一输出结构：features 为字符串数组 */
+    /** 门票统一输出结构：字段对齐前端 src/data/tickets.js */
     private Map<String, Object> ticketMap(Ticket t) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", t.getId());
+        String code = (t.getTypeCode() == null || t.getTypeCode().isBlank())
+                ? "ticket_" + t.getId() : t.getTypeCode();
+        m.put("id", code);                                   // 前端以票种编码作 id
+        m.put("dbId", t.getId());
+        m.put("code", code);
         m.put("emoji", t.getEmoji());
         m.put("name", t.getName());
         m.put("price", t.getPrice());
+        m.put("originalPrice", t.getOriginalPrice() == null ? t.getPrice() : t.getOriginalPrice());
+        m.put("discount", t.getDiscountLabel() == null ? "" : t.getDiscountLabel());
+        m.put("tag", t.getTagLabel() == null ? "标准" : t.getTagLabel());
+        m.put("desc", t.getDescText() == null ? "" : t.getDescText());
+        m.put("color", t.getColor() == null ? "#2f7d4f" : t.getColor());
+        m.put("sortNo", t.getSortNo());
         m.put("hot", Boolean.TRUE.equals(t.getHot()));
         m.put("features", splitFeatures(t.getFeatures()));
         return m;

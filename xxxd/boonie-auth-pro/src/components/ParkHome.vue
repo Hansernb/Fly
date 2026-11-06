@@ -240,7 +240,7 @@
         </div>
         <div class="hero-cta">
           <button class="hero-btn" type="button" @click="goSection('attractions')">🐾 开始探索</button>
-          <button class="hero-btn ghost" type="button" @click="goSection('tickets')">🎫 查看门票</button>
+          <button class="hero-btn ghost" type="button" @click="emit('tickets')">🎫 门票预订</button>
         </div>
       </div>
       <!-- 原 hero 内的 AI 熊头/树/猫头鹰/松鼠 装饰已移除 -->
@@ -328,19 +328,102 @@
       <div v-if="filteredTickets.length" class="tickets">
         <div
           v-for="t in filteredTickets"
-          :key="t.name"
+          :key="t.id"
           class="ticket"
           :class="{ hot: t.hot }"
         >
           <div v-if="t.hot" class="hot-badge">🔥 热门</div>
+          <div v-else-if="t.discount" class="disc-badge">{{ t.discount }}</div>
           <h3>{{ t.emoji }} {{ t.name }}</h3>
-          <div class="price">¥{{ t.price }}<small>/人</small></div>
+          <div class="price">
+            ¥{{ t.price }}<small>/人</small>
+            <s v-if="t.originalPrice > t.price" class="origin">¥{{ t.originalPrice }}</s>
+          </div>
           <ul>
             <li v-for="(f, i) in t.features" :key="i">✅ {{ f }}</li>
           </ul>
+          <button class="ticket-book" type="button" @click="emit('tickets', t.id)">
+            🎫 立即预订
+          </button>
         </div>
       </div>
       <div v-else class="empty">🍃 没有匹配的门票，换个关键词试试？</div>
+
+      <!-- 引导进入在线订票流程 -->
+      <div class="ticket-cta">
+        <div class="ticket-cta-text">
+          <b>选定票种、日期与数量，几步即可生成电子门票</b>
+          <span>支持成人 / 儿童 / 老人 / 套票，凭订单号闸机核销入园</span>
+        </div>
+        <button class="ticket-cta-btn" type="button" @click="emit('tickets')">🎫 立即在线预订 ›</button>
+      </div>
+    </section>
+
+    <!-- 森林小游戏入口 -->
+    <section id="games" class="section reveal">
+      <div class="section-head">
+        <h2 class="section-title">🎮 森林小游戏</h2>
+        <span class="games-count">3 款小游戏 · 随时开局</span>
+      </div>
+
+      <div class="games-entry">
+        <div class="ge-art" aria-hidden="true">
+          <svg class="ge-pad" viewBox="0 0 148 104">
+            <defs>
+              <linearGradient id="padGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#5cc47d" />
+                <stop offset="1" stop-color="#2f7d4f" />
+              </linearGradient>
+            </defs>
+            <ellipse cx="74" cy="94" rx="48" ry="7" fill="rgba(31,92,57,0.16)" />
+            <path
+              d="M38 24h72c12 0 21 10 19 23l-5 27c-2 11-15 15-22 6l-9-12H57l-9 12c-7 9-20 5-22-6l-5-27c-2-13 5-23 17-23Z"
+              fill="url(#padGrad)"
+              stroke="#1f5c39"
+              stroke-width="3"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M43 33h62c8 0 14 6 13 15l-4 23c-1 6-8 8-12 4l-8-10H54l-8 10c-4 4-11 2-12-4l-4-23c-1-9 5-15 13-15Z"
+              fill="rgba(255,255,255,0.14)"
+            />
+            <!-- 十字键 -->
+            <rect x="35" y="48" width="9" height="26" rx="3" fill="#204d33" />
+            <rect x="26.5" y="56.5" width="26" height="9" rx="3" fill="#204d33" />
+            <!-- 按钮 -->
+            <circle cx="104" cy="51" r="7.5" fill="#ffb703" stroke="#e39400" stroke-width="2.5" />
+            <circle cx="118" cy="64" r="7.5" fill="#e4572e" stroke="#bf4120" stroke-width="2.5" />
+            <circle cx="90" cy="64" r="7.5" fill="#fff7e0" stroke="#c89b63" stroke-width="2.5" />
+            <!-- 小天线叶子 -->
+            <path
+              d="M74 26c0-9 6-16 14-17-1 9-6 15-14 17Z"
+              fill="#4caf6d"
+              stroke="#1f5c39"
+              stroke-width="2.5"
+              stroke-linejoin="round"
+            />
+            <circle cx="74" cy="26" r="3.2" fill="#ffb703" stroke="#1f5c39" stroke-width="2" />
+          </svg>
+          <span class="ge-spark s1">✦</span>
+          <span class="ge-spark s2">✦</span>
+          <span class="ge-spark s3">✦</span>
+        </div>
+
+        <div class="ge-text">
+          <span class="ge-badge">🎮 新玩法</span>
+          <h3>森林小游戏中心</h3>
+          <p>排队等项目的空档来一局吧——接住掉落的蜂蜜罐、拍醒探头的小松鼠、翻开森林伙伴的配对卡，最佳成绩会留在狗熊岭。</p>
+          <div class="ge-tags">
+            <span class="ge-tag">🍯 接蜂蜜</span>
+            <span class="ge-tag">🐿️ 打松鼠</span>
+            <span class="ge-tag">🃏 森林翻牌</span>
+          </div>
+        </div>
+
+        <button class="ge-btn" type="button" @click="emit('games')">
+          <span class="ge-btn-icon">🎮</span> 开始游戏 ›
+        </button>
+      </div>
     </section>
 
     <!-- 游乐园风景（游客可上传） -->
@@ -561,6 +644,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import StarRating from './StarRating.vue'
 import { attractionsDB } from '../data/attractions.js'
+import { TICKETS, loadTickets } from '../data/tickets.js'
 import ParkMap from './ParkMap.vue'
 import ShowSchedule from './ShowSchedule.vue'
 import HabitatCards from './HabitatCards.vue'
@@ -569,7 +653,7 @@ const props = defineProps({
   user: { type: Object, required: true },
   token: { type: String, required: true }
 })
-const emit = defineEmits(['logout', 'admin', 'attractions'])
+const emit = defineEmits(['logout', 'admin', 'attractions', 'tickets', 'games'])
 
 /* 仅管理员（permission === 0）才显示「后台管理系统」入口 */
 const isAdmin = computed(() => Number(props.user?.permission) === 0)
@@ -958,6 +1042,7 @@ onMounted(async () => {
     // 后端不可达时保持页面展示
   }
   await fetchAttractions()
+  await loadTickets()   // 门票从 MySQL（/api/tickets）加载，失败自动降级内置票库
   setupScrollSpy()
   setupReveal()
   loadScenery()
@@ -1028,6 +1113,7 @@ const menus = [
   { id: 'map', label: '园区地图', icon: '🗺️' },
   { id: 'habitats', label: '栖息地', icon: '🦉' },
   { id: 'shows', label: '演出', icon: '🎪' },
+  { id: 'games', label: '小游戏', icon: '🎮' },
   { id: 'tickets', label: '门票', icon: '🎫' },
   { id: 'scenery', label: '风景', icon: '📷' },
   { id: 'reviews', label: '评价', icon: '🗣️' }
@@ -1072,11 +1158,7 @@ const shows = [
   { time: '19:30', emoji: '🎆', name: '森林星光巡游', place: '主干道 · 花车 + 烟花压轴大秀', tag: '约 50 分钟' }
 ]
 
-const tickets = [
-  { emoji: '🎫', name: '成人票', price: 199, hot: false, features: ['全天畅玩所有项目', '含 1 场剧场演出'] },
-  { emoji: '👨‍👩‍👧', name: '亲子套票', price: 399, hot: true, features: ['2 大 1 小全天畅玩', '含全部演出', '赠蜂蜜爆米花一份'] },
-  { emoji: '🌙', name: '夜场票', price: 99, hot: false, features: ['17:00 后入园', '含星光巡游观赏位'] }
-]
+const tickets = TICKETS
 
 /* ===================== 游乐园风景图廊（游客可上传） ===================== */
 const LS_SCENERY = 'boonie_scenery_uploads'
@@ -2663,6 +2745,20 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   border-radius: 999px;
   box-shadow: 0 4px 10px rgba(255, 183, 3, 0.4);
 }
+/* 优惠角标：儿童 / 老人 / 套票 */
+.disc-badge {
+  position: absolute;
+  top: -12px;
+  right: -8px;
+  background: linear-gradient(180deg, #ff6b3d, var(--danger));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  box-shadow: 0 4px 10px rgba(228, 87, 46, 0.4);
+  white-space: nowrap;
+}
 .ticket h3 {
   font-size: 16px;
   font-weight: 800;
@@ -2679,6 +2775,15 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   font-weight: 600;
   color: var(--muted);
 }
+/* 原价划线（优惠票） */
+.price .origin {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: line-through;
+  margin-left: 8px;
+  vertical-align: middle;
+}
 .ticket ul {
   list-style: none;
   display: flex;
@@ -2688,6 +2793,28 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
 .ticket li {
   font-size: 13px;
   color: var(--muted);
+}
+/* 票卡上的直接预订按钮 */
+.ticket-book {
+  margin-top: 16px;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #5cc07c, var(--forest));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 11px 18px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--forest-deep);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
+}
+.ticket-book:hover {
+  filter: brightness(1.05);
+}
+.ticket-book:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--forest-deep);
 }
 
 /* 空状态 */
@@ -2700,6 +2827,248 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   font-size: 15px;
   color: var(--muted);
   font-weight: 600;
+}
+
+/* 门票区块底部：引导进入在线订票 */
+.ticket-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 18px 22px;
+  background: linear-gradient(120deg, rgba(255, 183, 3, 0.16) 0%, rgba(47, 125, 79, 0.12) 100%);
+  border: 2px solid var(--honey);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+.ticket-cta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ticket-cta-text b {
+  font-size: 15px;
+  color: var(--forest-deep);
+}
+.ticket-cta-text span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ticket-cta-btn {
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffd23f, var(--honey));
+  color: #5a3d00;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 12px 24px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 5px 0 #e09b00;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
+}
+.ticket-cta-btn:hover {
+  filter: brightness(1.03);
+}
+.ticket-cta-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #e09b00;
+}
+@media (max-width: 620px) {
+  .ticket-cta {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+}
+
+/* ===== 森林小游戏入口 ===== */
+.games-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.75);
+  border: 2px solid rgba(200, 155, 99, 0.4);
+  border-radius: 999px;
+  padding: 5px 13px;
+  white-space: nowrap;
+}
+.games-entry {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 24px 28px;
+  border: 2px solid var(--wood-light);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(255, 183, 3, 0.34), transparent 46%),
+    radial-gradient(circle at 6% 96%, rgba(76, 175, 109, 0.26), transparent 52%),
+    linear-gradient(135deg, #eef9e2 0%, #f9f5dd 55%, #ffeec2 100%);
+  overflow: hidden;
+  box-shadow: 0 14px 34px -22px rgba(47, 125, 79, 0.85);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+.games-entry::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 2px dashed rgba(200, 155, 99, 0.4);
+  border-radius: 16px;
+  pointer-events: none;
+}
+.games-entry:hover {
+  transform: translateY(-4px);
+  border-color: var(--forest);
+  box-shadow: 0 26px 46px -26px rgba(47, 125, 79, 0.95);
+}
+.ge-art {
+  position: relative;
+  flex: 0 0 132px;
+  height: 100px;
+}
+.ge-pad {
+  width: 132px;
+  height: 100px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 10px 14px rgba(31, 92, 57, 0.22));
+}
+.games-entry:hover .ge-pad {
+  transform: rotate(-7deg) translateY(-5px) scale(1.04);
+}
+.ge-spark {
+  position: absolute;
+  color: var(--honey);
+  font-size: 14px;
+  font-weight: 900;
+  animation: geTwinkle 2.4s ease-in-out infinite;
+}
+.ge-spark.s1 {
+  top: 2px;
+  left: 4px;
+  animation-delay: 0s;
+}
+.ge-spark.s2 {
+  top: 14px;
+  right: 2px;
+  font-size: 10px;
+  animation-delay: 0.7s;
+}
+.ge-spark.s3 {
+  bottom: 6px;
+  right: 12px;
+  font-size: 12px;
+  animation-delay: 1.4s;
+}
+@keyframes geTwinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+.ge-text {
+  flex: 1;
+  min-width: 0;
+}
+.ge-badge {
+  display: inline-block;
+  background: rgba(255, 183, 3, 0.24);
+  color: #9a6c05;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 7px;
+}
+.ge-text h3 {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--forest-deep);
+  margin-bottom: 7px;
+  letter-spacing: 0.4px;
+}
+.ge-text p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+  max-width: 560px;
+  margin-bottom: 11px;
+}
+.ge-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ge-tag {
+  background: #fff;
+  border: 2px solid rgba(47, 125, 79, 0.16);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--forest-deep);
+}
+.ge-btn {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffd23f, var(--honey));
+  color: #5a3d00;
+  font-size: 15px;
+  font-weight: 900;
+  padding: 14px 26px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 6px 0 #e09b00, 0 14px 24px -14px rgba(224, 155, 0, 0.9);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
+}
+.ge-btn:hover {
+  filter: brightness(1.04);
+}
+.ge-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #e09b00;
+}
+.ge-btn-icon {
+  font-size: 17px;
+}
+
+@media (max-width: 780px) {
+  .games-entry {
+    flex-direction: column;
+    text-align: center;
+    padding: 22px 18px 24px;
+    gap: 14px;
+  }
+  .ge-art {
+    flex: 0 0 auto;
+    height: 88px;
+  }
+  .ge-pad {
+    width: 118px;
+    height: 88px;
+  }
+  .ge-tags {
+    justify-content: center;
+  }
+  .ge-text h3 {
+    font-size: 18px;
+  }
+  .ge-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* 林缘树线 */

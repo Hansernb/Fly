@@ -207,6 +207,107 @@ INSERT IGNORE INTO `boonie_ticket` (`id`, `emoji`, `name`, `price`, `hot`, `feat
 (2,'👨‍👩‍👧','亲子套票',399.00,1,'2 大 1 小全天畅玩\n含全部演出\n赠蜂蜜爆米花一份'),
 (3,'🌙','夜场票',99.00,0,'17:00 后入园\n含星光巡游观赏位');
 
+-- =============================================================
+-- 迁移 5：门票表扩容（对齐前端票库：票种编码 / 原价 / 优惠标签 / 排序）
+-- =============================================================
+SET @has_ticket_code := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_ticket' AND COLUMN_NAME = 'type_code'
+);
+SET @sql5 := IF(@has_ticket_code = 0,
+  'ALTER TABLE `boonie_ticket`
+     ADD COLUMN `type_code` varchar(32) DEFAULT NULL COMMENT ''票种编码：adult/child/senior/family/night'' AFTER `id`,
+     ADD COLUMN `original_price` decimal(10,2) NOT NULL DEFAULT 0 COMMENT ''原价（用于划线优惠）'' AFTER `price`,
+     ADD COLUMN `discount_label` varchar(16) DEFAULT NULL COMMENT ''优惠标签，如 5 折 / 套票'' AFTER `original_price`,
+     ADD COLUMN `tag_label` varchar(16) DEFAULT NULL COMMENT ''角标文案：标准/儿童优惠/热门/夜场'' AFTER `discount_label`,
+     ADD COLUMN `desc_text` varchar(255) DEFAULT NULL COMMENT ''一句话说明（订票流程用）'' AFTER `tag_label`,
+     ADD COLUMN `color` varchar(16) DEFAULT ''#2f7d4f'' COMMENT ''主题色'' AFTER `desc_text`,
+     ADD COLUMN `sort_no` int NOT NULL DEFAULT 0 COMMENT ''首页排序'' AFTER `color`,
+     ADD COLUMN `enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT ''是否上架：1 上架 0 下架'' AFTER `sort_no`',
+  'SELECT 1');
+PREPARE _st5 FROM @sql5; EXECUTE _st5; DEALLOCATE PREPARE _st5;
+
+-- 票种编码/原价缺失的老数据补齐（幂等）
+UPDATE `boonie_ticket` SET `original_price` = `price` WHERE `original_price` = 0 OR `original_price` IS NULL;
+UPDATE `boonie_ticket` SET `sort_no` = `id` WHERE `sort_no` = 0;
+UPDATE `boonie_ticket` SET `type_code` = CONCAT('ticket_', `id`) WHERE `type_code` IS NULL OR `type_code` = '';
+
+-- ---------------------------- 门票订单表 ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_ticket_order` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `order_no` varchar(32) NOT NULL COMMENT '订单号 BK+时间+随机',
+  `user_id` bigint DEFAULT NULL COMMENT '下单用户（游客为空）',
+  `user_name` varchar(64) DEFAULT NULL COMMENT '下单用户名',
+  `ticket_id` bigint NOT NULL COMMENT '票种 id',
+  `ticket_code` varchar(32) DEFAULT NULL COMMENT '票种编码',
+  `ticket_name` varchar(64) NOT NULL COMMENT '票种名称快照',
+  `emoji` varchar(16) DEFAULT '🎫' COMMENT '票种图标',
+  `unit_price` decimal(10,2) NOT NULL DEFAULT 0 COMMENT '成交单价',
+  `original_price` decimal(10,2) NOT NULL DEFAULT 0 COMMENT '原价单价',
+  `quantity` int NOT NULL DEFAULT 1 COMMENT '购买数量',
+  `total_amount` decimal(10,2) NOT NULL DEFAULT 0 COMMENT '应付总额',
+  `saved_amount` decimal(10,2) NOT NULL DEFAULT 0 COMMENT '已优惠金额',
+  `visit_date` date NOT NULL COMMENT '游玩日期',
+  `buyer_name` varchar(64) NOT NULL COMMENT '取票人姓名',
+  `buyer_phone` varchar(20) NOT NULL COMMENT '取票人手机号',
+  `status` varchar(16) NOT NULL DEFAULT '待使用' COMMENT '待使用/已取消/已使用',
+  `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uk_order_no`(`order_no`),
+  INDEX `idx_order_user`(`user_id`),
+  INDEX `idx_order_visit`(`visit_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 小游戏成绩表 ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_game_score` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '用户 id',
+  `user_name` varchar(64) DEFAULT NULL COMMENT '用户名快照',
+  `game_id` varchar(32) NOT NULL COMMENT '游戏编码：honey/mole/match',
+  `game_name` varchar(64) DEFAULT NULL COMMENT '游戏名称',
+  `best_score` int NOT NULL DEFAULT 0 COMMENT '最佳成绩（match 为最少步数，越小越好）',
+  `plays` int NOT NULL DEFAULT 0 COMMENT '游玩局数',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uk_user_game`(`user_id`, `game_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 种子：5 种门票（含儿童/老人优惠，幂等 upsert） ----------------------------
+INSERT INTO `boonie_ticket`
+  (`id`, `type_code`, `emoji`, `name`, `price`, `original_price`, `discount_label`, `tag_label`, `desc_text`, `color`, `sort_no`, `hot`, `features`, `enabled`)
+VALUES
+(1, 'adult', '🧑', '成人票', 199.00, 199.00, NULL, '标准',
+ '1.5m 以上游客全天畅玩', '#e4572e', 1, 0, '全天畅玩所有项目\n含 1 场剧场演出', 1),
+(2, 'child', '🧒', '儿童票', 99.00, 199.00, '5 折', '儿童优惠',
+ '1.0m–1.5m 儿童 · 原价 ¥199 立减 100', '#ffb703', 2, 0, '1.0m–1.5m 儿童适用\n全天畅玩所有项目\n含 1 场剧场演出', 1),
+(3, 'senior', '👴', '老人票', 99.00, 199.00, '5 折', '长者优惠',
+ '65 周岁及以上长者 · 原价 ¥199 立减 100', '#7c5cbf', 3, 0, '65 周岁及以上长者适用\n全天畅玩所有项目\n含 1 场剧场演出', 1),
+(4, 'family', '👨‍👩‍👧', '亲子套票', 399.00, 497.00, '套票', '热门',
+ '2 大 1 小 全天畅玩 · 比单买省 ¥98', '#2f7d4f', 4, 1, '2 大 1 小全天畅玩\n含全部演出\n赠蜂蜜爆米花一份', 1),
+(5, 'night', '🌙', '夜场票', 99.00, 99.00, NULL, '夜场',
+ '17:00 后入园 · 含星光巡游', '#4caf6d', 5, 0, '17:00 后入园\n含星光巡游观赏位', 1)
+ON DUPLICATE KEY UPDATE
+  `type_code` = VALUES(`type_code`),
+  `emoji` = VALUES(`emoji`),
+  `name` = VALUES(`name`),
+  `price` = VALUES(`price`),
+  `original_price` = VALUES(`original_price`),
+  `discount_label` = VALUES(`discount_label`),
+  `tag_label` = VALUES(`tag_label`),
+  `desc_text` = VALUES(`desc_text`),
+  `color` = VALUES(`color`),
+  `sort_no` = VALUES(`sort_no`),
+  `hot` = VALUES(`hot`),
+  `features` = VALUES(`features`),
+  `enabled` = VALUES(`enabled`);
+
+-- 票种编码兜底唯一化（老库若存在重复编码，按 id 修正；新库无副作用）
+UPDATE `boonie_ticket` SET `type_code` = CONCAT('ticket_', `id`)
+ WHERE `type_code` IS NULL OR `type_code` = '';
+
 SET FOREIGN_KEY_CHECKS = 1;
 
-SELECT 'db-init.sql 执行完成（permission 字段 + 明文密码 + 栖息地/演出/门票 已就绪）' AS `result`;
+SELECT 'db-init.sql 执行完成（用户/栖息地/演出/5 种门票 + 门票订单表 + 小游戏成绩表 已就绪）' AS `result`;

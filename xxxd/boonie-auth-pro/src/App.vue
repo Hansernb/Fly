@@ -24,6 +24,23 @@
   <!-- 园区手绘地图页（独立路由） -->
   <ParkMap v-else-if="view === 'map'" @back="goHome" />
 
+  <!-- 门票预订流程页（独立路由） -->
+  <TicketBooking
+    v-else-if="view === 'tickets'"
+    :user="session?.user || null"
+    :token="session?.token || ''"
+    :initial-ticket-id="presetTicketId"
+    @back="goHome"
+  />
+
+  <!-- 森林小游戏中心页（独立路由） -->
+  <ForestGames
+    v-else-if="view === 'games'"
+    :token="session?.token || ''"
+    :user="session?.user || null"
+    @back="goHome"
+  />
+
   <!-- 已登录：进入森林游乐园主页 -->
   <ParkHome
     v-else-if="session"
@@ -32,6 +49,8 @@
     @logout="onLogout"
     @admin="enterAdminLogin"
     @attractions="enterAttractions"
+    @tickets="enterTickets"
+    @games="enterGames"
   />
 
   <!-- 未登录：森林登录 / 注册页 -->
@@ -50,11 +69,14 @@ import AdminLogin from './components/AdminLogin.vue'
 import AdminPanel from './components/AdminPanel.vue'
 import AttractionList from './components/AttractionList.vue'
 import ParkMap from './components/ParkMap.vue'
+import TicketBooking from './components/TicketBooking.vue'
+import ForestGames from './components/ForestGames.vue'
 
 const session = ref(null)      // 前台会话 { user, token }
 const adminSession = ref(null) // 后台会话 { user, token }
-const view = ref('home')       // home | adminLogin | admin | attractions | map
+const view = ref('home')       // home | adminLogin | admin | attractions | map | tickets
 const toast = ref('')          // 权限拦截提示文案
+const presetTicketId = ref('') // 从首页票卡直接预订时携带的票种 id
 
 /**
  * 当前登录用户（含 permission）：
@@ -97,9 +119,11 @@ const ROUTES = [
   { path: '/admin/login', view: 'adminLogin' },
   { path: '/admin', view: 'admin' },
   { path: '/attractions', view: 'attractions' },
-  { path: '/map', view: 'map' }
+  { path: '/map', view: 'map' },
+  { path: '/tickets', view: 'tickets' },
+  { path: '/games', view: 'games' }
 ]
-const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map' }
+const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map', tickets: '/tickets', games: '/games' }
 
 function go(path, viewName) {
   if (location.pathname !== path) {
@@ -202,6 +226,17 @@ function enterAttractions() {
 /** 首页导航「园区地图」→ 进入手绘地图页 */
 function enterMap() {
   go('/map', 'map')
+}
+
+/** 首页导航「门票预订」→ 进入在线订票流程页（可携带预选票种） */
+function enterTickets(ticketId) {
+  presetTicketId.value = typeof ticketId === 'string' ? ticketId : ''
+  go('/tickets', 'tickets')
+}
+
+/** 首页「森林小游戏」入口 → 进入小游戏中心页 */
+function enterGames() {
+  go('/games', 'games')
 }
 
 /** 退出后台，回到首页（保留前台会话） */

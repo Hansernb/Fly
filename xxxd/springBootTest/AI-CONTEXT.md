@@ -77,3 +77,14 @@
 - 用户要求：脚本用 GBK 编码、项目内路径用相对路径、脚本不能依赖 target/node_modules 已存在
 - 启动整套（前端+后端）：双击 `../boonie-auth-pro/start.bat`（它会连带启动本项目）
 - 如果 mvnw 报错说找不到 Java → 电脑重置删了 JDK，需先装 JDK 17+
+
+## 门票预订 / 小游戏成绩接口（2026-11 新增，已落库）
+- 表：`boonie_ticket`（扩容 type_code/original_price/discount_label/tag_label/desc_text/color/sort_no/enabled）、`boonie_ticket_order`、`boonie_game_score`，建表与 5 种票种子都在 `db-init.sql`（幂等，可重复执行）
+- `GET /api/tickets` — 上架门票，按 sort_no 排序；`id` 返回票种编码（adult/child/senior/family/night），另带 `dbId`、`originalPrice`、`discount`、`tag`、`desc`、`color`、`features[]`
+- `POST /api/orders` — 下单 `{ ticketId, quantity, visitDate, buyerName, buyerPhone }`；**价格由后端按票库重算**，前端传的价格不采信；ticketId 支持编码或数据库 id
+- `GET /api/orders` — 我的订单（按令牌用户，倒序）
+- `POST /api/orders/{orderNo}/cancel` — 取消订单（仅本人 + 待使用）
+- `GET /api/games/scores` / `POST /api/games/scores` — 我的成绩 / 上报一局 `{ gameId: honey|mole|match, score }`；honey/mole 取最大，match（步数）取最小，plays 每局 +1
+- `GET /api/games/leaderboard` — 三款游戏 Top10（无需登录）
+- 前端对应：`src/data/tickets.js` 的 `TICKETS` 是响应式数组 + `loadTickets()`（接口失败自动降级内置票库）；`TicketBooking.vue` 订单走 `/api/orders`，未登录/断网降级 localStorage；`ForestGames.vue` 成绩走 `/api/games/scores`
+- ⚠️ 改了后端 Java 需重启 8080 进程（`stop.bat` + `start.bat`）新接口才生效

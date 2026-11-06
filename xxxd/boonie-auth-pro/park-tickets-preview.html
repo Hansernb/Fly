@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>狗熊岭 · 在线订票（预览）</title>
+<style>
+  :root{
+    --forest:#2f7d4f; --forest-deep:#1f5c39; --leaf:#4caf6d; --wood:#a9743c;
+    --wood-light:#c89b63; --cream:#fff8ec; --honey:#ffb703; --text:#3a2e1f;
+    --muted:#8a7a63; --danger:#e4572e; --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei","Comic Sans MS",sans-serif;color:var(--text);
+    min-height:100vh;background:linear-gradient(180deg,#2b4a35,#24402e 55%,#1d3325);padding:20px}
+  .booking{max-width:880px;margin:0 auto;padding:4px}
+  .bk-bar{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .bk-back{border:2px solid var(--wood-light);background:#fff;color:var(--forest-deep);font-size:14px;
+    font-weight:700;padding:8px 14px;border-radius:10px;cursor:pointer}
+  .bk-title{flex:1;font-size:20px;font-weight:900;color:#fff;margin:0}
+  .bk-orders-btn{position:relative;border:2px solid var(--honey);
+    background:linear-gradient(180deg,#ffd23f,var(--honey));color:#5a3d00;font-size:13.5px;
+    font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer;box-shadow:0 4px 0 #e09b00}
+  .bk-orders-badge{position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;padding:0 4px;
+    border-radius:9px;background:var(--danger);color:#fff;font-size:11px;line-height:18px;text-align:center;border:2px solid #fff}
+  .steps{display:flex;list-style:none;margin:0 0 18px;padding:0}
+  .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+  .step:not(:last-child)::after{content:'';position:absolute;top:15px;left:60%;width:80%;height:3px;
+    background:var(--wood-light);border-radius:2px}
+  .step.done:not(:last-child)::after{background:var(--leaf)}
+  .step-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:800;background:#fff;border:3px solid var(--wood-light);color:var(--muted);z-index:1}
+  .step.on .step-dot{background:linear-gradient(180deg,#ffd23f,var(--honey));border-color:var(--honey);color:#5a3d00;box-shadow:0 4px 10px rgba(224,155,0,.4)}
+  .step.done .step-dot{background:var(--leaf);border-color:var(--leaf);color:#fff}
+  .step-label{font-size:12.5px;font-weight:700;color:#cfe6d6}
+  .step.on .step-label{color:#fff}
+  .bk-card{background:#fffdf7;border:3px solid var(--wood-light);border-radius:var(--radius);padding:22px 22px 18px;
+    box-shadow:0 14px 34px rgba(0,0,0,.25)}
+  .bk-h2{font-size:19px;font-weight:900;color:var(--forest-deep);margin:0 0 4px}
+  .bk-sub{font-size:13px;color:var(--muted);margin:0 0 18px}
+  .tk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .tk{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px 10px 14px;
+    border:3px solid var(--wood-light);border-radius:16px;background:#fff;cursor:pointer;text-align:center;transition:.14s}
+  .tk:hover{transform:translateY(-3px);box-shadow:0 10px 22px rgba(47,125,79,.16)}
+  .tk.on{border-color:var(--tk);box-shadow:0 8px 20px rgba(0,0,0,.12);background:#fff7e6}
+  .tk-hot{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--danger);color:#fff;
+    font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;white-space:nowrap}
+  .tk-disc{position:absolute;top:-10px;right:-8px;background:linear-gradient(180deg,#ff6b3d,var(--danger));color:#fff;
+    font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;white-space:nowrap;box-shadow:0 3px 8px rgba(228,87,46,.45)}
+  .tk-emoji{font-size:34px;line-height:1}.tk-name{font-size:15px;font-weight:800;color:var(--forest-deep)}
+  .tk-price{font-size:18px;font-weight:900;color:var(--tk);display:flex;align-items:baseline;gap:5px;justify-content:center}
+  .tk-price small{font-size:11px;font-weight:600;color:var(--muted)}
+  .tk-origin{font-size:12px;font-weight:600;color:var(--muted);text-decoration:line-through}
+  .tk-desc{font-size:11.5px;color:var(--muted);line-height:1.4}
+  .date-wrap{display:flex;flex-direction:column;gap:12px}
+  .date-input{width:100%;height:52px;font-size:16px;padding:0 16px;border:2px solid var(--wood-light);
+    border-radius:14px;background:#fffdf8;color:var(--text)}
+  .date-tip{font-size:14px}.date-tip b{color:var(--forest-deep)}.date-week{color:var(--muted);font-size:13px}
+  .day-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:18px}
+  .day-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 4px 10px;
+    border:2px solid var(--wood-light);border-radius:14px;background:#fff;cursor:pointer;transition:.14s}
+  .day-card:hover{transform:translateY(-2px);border-color:var(--forest)}
+  .day-card.on{background:rgba(47,125,79,.1);border-color:var(--forest);box-shadow:0 6px 14px rgba(47,125,79,.18)}
+  .day-week{font-size:12px;font-weight:700;color:var(--muted)}.day-card.on .day-week{color:var(--forest-deep)}
+  .day-num{font-size:16px;font-weight:900;color:var(--text)}.day-card.on .day-num{color:var(--forest-deep)}
+  .day-badge{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--honey);color:#5a3d00;
+    font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;white-space:nowrap}
+  .date-other{display:flex;align-items:center;gap:12px}
+  .date-other-label{font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
+  .date-selected{margin-top:14px;padding:12px 16px;background:#f6fbf3;border:2px dashed var(--leaf);border-radius:12px;
+    font-size:14px;color:var(--text)}
+  .date-selected b{color:var(--forest-deep)}
+  .qty-block{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#f6fbf3;
+    border:2px solid var(--leaf);border-radius:16px;padding:18px 20px;flex-wrap:wrap}
+  .qty-tk{display:flex;align-items:center;gap:12px}.qty-emoji{font-size:38px}
+  .qty-name{font-size:16px;font-weight:800;color:var(--forest-deep)}.qty-unit{font-size:13px;color:var(--muted)}
+  .stepper{display:flex;align-items:center;gap:14px}
+  .stepper button{width:42px;height:42px;border-radius:50%;border:2px solid var(--forest);background:#fff;
+    color:var(--forest-deep);font-size:22px;font-weight:800;cursor:pointer;line-height:1}
+  .stepper button:disabled{opacity:.4;cursor:not-allowed;border-color:var(--wood-light)}
+  .stepper-num{min-width:36px;text-align:center;font-size:24px;font-weight:900;color:var(--forest-deep)}
+  .qty-quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .qty-chip{border:2px solid var(--wood-light);background:#fffdf8;color:var(--muted);font-size:13px;font-weight:700;
+    padding:8px 16px;border-radius:999px;cursor:pointer}
+  .qty-chip.on{background:rgba(47,125,79,.12);border-color:var(--forest);color:var(--forest-deep)}
+  .qty-subtotal{display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding:14px 18px;
+    background:linear-gradient(180deg,#f6fbf3,#eef7ea);border:2px solid var(--leaf);border-radius:14px;
+    font-size:14px;color:var(--muted);flex-wrap:wrap;gap:8px}
+  .qty-subtotal b{font-size:22px;color:var(--danger)}
+  .qty-saved{font-style:normal;font-weight:800;color:var(--forest);margin-left:6px}
+  .qty-origin{text-decoration:line-through;margin-left:6px;color:var(--muted)}
+  .buyer{margin-top:20px;padding-top:4px}
+  .buyer-title{font-size:15px;font-weight:900;color:var(--forest-deep);margin:0 0 12px}
+  .field{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .field label{width:62px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--muted);text-align:right}
+  .field input{flex:1;height:46px;padding:0 14px;font-size:15px;border:2px solid var(--wood-light);
+    border-radius:12px;background:#fffdf8;color:var(--text)}
+  .field input:focus{outline:none;border-color:var(--forest);box-shadow:0 0 0 3px rgba(47,125,79,.16)}
+  .field-err{margin:-4px 0 10px 74px;font-size:12.5px;font-weight:700;color:var(--danger)}
+  .agree{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:12.5px;line-height:1.6;
+    color:var(--muted);cursor:pointer}
+  .agree input{margin-top:2px;width:16px;height:16px;accent-color:var(--forest);flex-shrink:0}
+  .confirm{border:2px dashed var(--wood-light);border-radius:16px;padding:8px 18px}
+  .confirm-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;
+    border-bottom:1px dashed var(--wood-light);font-size:15px}
+  .confirm-row:last-of-type{border-bottom:none}.confirm-k{color:var(--muted);font-weight:600}
+  .confirm-v{font-weight:800;color:var(--text)}.confirm-row.total .confirm-v{font-size:22px;color:var(--danger)}
+  .confirm-origin{font-size:13px;font-weight:600;color:var(--muted);text-decoration:line-through;margin-left:6px}
+  .confirm-v.saved{color:var(--forest)}
+  .confirm-note{margin:14px 0 0;font-size:12.5px;color:var(--muted);text-align:center}
+  .bk-foot{display:flex;align-items:center;gap:12px;margin-top:20px}
+  .bk-foot-spacer{flex:1}
+  .bk-btn{border:none;border-radius:12px;font-size:15px;font-weight:800;padding:12px 24px;cursor:pointer}
+  .bk-btn.primary{background:linear-gradient(180deg,#ffd23f,var(--honey));color:#5a3d00;box-shadow:0 5px 0 #e09b00}
+  .bk-btn.primary:active{transform:translateY(4px);box-shadow:0 1px 0 #e09b00}
+  .bk-btn.primary:disabled{opacity:.5;cursor:not-allowed;box-shadow:0 5px 0 #e0c080}
+  .bk-btn.ghost{background:#fff;border:2px solid var(--wood-light);color:var(--forest-deep)}
+  .price-bar{display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding:14px 20px;
+    background:linear-gradient(180deg,#2f7d4f,#1f5c39);border-radius:16px;color:#fff;box-shadow:0 10px 24px rgba(0,0,0,.3)}
+  .price-info{display:flex;flex-direction:column;gap:2px}.price-tk{font-size:15px;font-weight:800}
+  .price-meta{font-size:12px;opacity:.85}.price-origin{text-decoration:line-through;opacity:.75}
+  .price-saved{font-style:normal;font-weight:800;color:#ffd23f;background:rgba(255,210,63,.18);border-radius:999px;padding:1px 7px}
+  .price-total{font-size:28px;font-weight:900;color:#ffd23f}
+  .success{background:#fffdf7;border:3px solid var(--leaf);border-radius:var(--radius);padding:34px 24px;text-align:center;
+    box-shadow:0 14px 34px rgba(0,0,0,.25)}
+  .success-badge{font-size:60px;line-height:1;animation:pop .5s cubic-bezier(.34,1.56,.64,1) both}
+  @keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+  .success h2{margin:12px 0 4px;font-size:24px;color:var(--forest-deep)}.success-sub{color:var(--muted);font-size:14px;margin:0 0 20px}
+  .success-order{max-width:360px;margin:0 auto 22px;border:2px solid var(--wood-light);border-radius:16px;padding:6px 18px;text-align:left}
+  .so-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--wood-light);font-size:14px}
+  .so-row:last-child{border-bottom:none}.so-row span{color:var(--muted)}.so-row b{color:var(--text)}
+  .so-row.total b{font-size:20px;color:var(--danger)}.so-no{font-family:"Courier New",monospace}
+  .success-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .orders-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .order-list{display:flex;flex-direction:column;gap:14px}
+  .order{background:#fffdf7;border:3px solid var(--wood-light);border-radius:16px;padding:16px 18px;box-shadow:0 8px 20px rgba(0,0,0,.2)}
+  .order.cancelled{opacity:.6}
+  .order-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .order-tk{font-size:16px;font-weight:800;color:var(--forest-deep)}
+  .order-status{font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px}
+  .st-ok{background:rgba(76,175,109,.18);color:var(--forest-deep)}.st-cancel{background:rgba(138,122,99,.18);color:var(--muted)}
+  .order-no{font-size:13px;color:var(--muted);margin-bottom:12px}.order-no b{font-family:"Courier New",monospace;color:var(--text)}
+  .order-buyer{margin-left:12px;color:var(--muted)}
+  .order-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px 0;border-top:1px dashed var(--wood-light);border-bottom:1px dashed var(--wood-light)}
+  .order-grid>div{display:flex;flex-direction:column;gap:3px}.order-grid span{font-size:12px;color:var(--muted)}.order-grid b{font-size:14px;color:var(--text)}
+  .order-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px}
+  .order-total{font-size:14px;color:var(--muted)}.order-total b{font-size:20px;color:var(--danger);margin-left:4px}
+  .order-ops{display:flex;gap:8px}.op-btn{border:2px solid var(--wood-light);background:#fff;color:var(--forest-deep);
+    font-size:13px;font-weight:700;padding:7px 14px;border-radius:10px;cursor:pointer}
+  .op-btn.danger{border-color:var(--danger);color:var(--danger)}
+  .order-empty{text-align:center;padding:50px 20px;color:#cfe6d6;font-size:15px}
+  .order-empty-cta{margin-top:18px}
+  .bk-toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:9999;max-width:90vw;padding:10px 18px;
+    border-radius:12px;background:rgba(24,36,29,.96);color:#f3d98a;font-size:13px;font-weight:700}
+  @media(max-width:620px){.tk-grid{grid-template-columns:repeat(2,1fr)}.order-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const TICKETS=[
+  {id:'adult',name:'成人票',emoji:'🧑',price:199,originalPrice:199,discount:'',tag:'标准',hot:false,desc:'1.5m 以上游客全天畅玩',features:['全天畅玩所有项目','含 1 场剧场演出'],color:'#e4572e'},
+  {id:'child',name:'儿童票',emoji:'🧒',price:99,originalPrice:199,discount:'5 折',tag:'儿童优惠',hot:false,desc:'1.0m–1.5m 儿童 · 原价 ¥199 立减 100',features:['1.0m–1.5m 儿童适用','全天畅玩所有项目','含 1 场剧场演出'],color:'#ffb703'},
+  {id:'senior',name:'老人票',emoji:'👴',price:99,originalPrice:199,discount:'5 折',tag:'长者优惠',hot:false,desc:'65 周岁及以上长者 · 原价 ¥199 立减 100',features:['65 周岁及以上长者适用','全天畅玩所有项目','含 1 场剧场演出'],color:'#7c5cbf'},
+  {id:'family',name:'亲子套票',emoji:'👨‍👩‍👧',price:399,originalPrice:497,discount:'套票',tag:'热门',hot:true,desc:'2 大 1 小 全天畅玩 · 比单买省 ¥98',features:['2 大 1 小全天畅玩','含全部演出','赠蜂蜜爆米花一份'],color:'#2f7d4f'},
+  {id:'night',name:'夜场票',emoji:'🌙',price:99,originalPrice:99,discount:'',tag:'夜场',hot:false,desc:'17:00 后入园 · 含星光巡游',features:['17:00 后入园','含星光巡游观赏位'],color:'#4caf6d'}
+];
+const LS_KEY='boonie_ticket_orders_v1';
+const WEEK=['周日','周一','周二','周三','周四','周五','周六'];
+const today=new Date();
+const fmt=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;};
+const todayStr=fmt(today), maxDateStr=fmt(new Date(today.getTime()+90*864e5));
+const quickDates=[];
+for(let i=0;i<3;i++){const d=new Date(today.getTime()+i*864e5);quickDates.push({val:fmt(d),label:i===0?'今天':i===1?'明天':'后天'});}
+const sat=new Date(today);const off=(6-today.getDay())%7;sat.setDate(today.getDate()+(off===0?7:off));
+if(fmt(sat)>todayStr)quickDates.push({val:fmt(sat),label:'本周六'});
+
+let mode='book', step=1, selectedId='', visitDate=todayStr, quantity=1, buyerName='', buyerPhone='', agreed=false, orders=loadOrders(), successOrder=null, toast='';
+let toastTimer=null;
+const $=s=>document.querySelector(s);
+const root=$('#app');
+function loadOrders(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'[]')}catch{return[]}}
+function saveOrders(){try{localStorage.setItem(LS_KEY,JSON.stringify(orders))}catch{}}
+function showToast(m){toast=m;clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast='',2600);}
+function selectedTicket(){return TICKETS.find(t=>t.id===selectedId)||null;}
+function total(){const t=selectedTicket();return t?t.price*quantity:0;}
+function saved(){const t=selectedTicket();return t?Math.max(0,t.originalPrice-t.price)*quantity:0;}
+function prettyDate(){if(!visitDate)return'—';const[y,m,d]=visitDate.split('-');return `${y}年${+m}月${+d}日`;}
+function weekday(){return visitDate?WEEK[new Date(visitDate).getDay()]:'';}
+function weekDays(){const a=[];for(let i=0;i<7;i++){const d=new Date(today.getTime()+i*864e5);a.push({val:fmt(d),week:i===0?'今天':i===1?'明天':WEEK[d.getDay()],md:`${d.getMonth()+1}/${d.getDate()}`,badge:i===0?'今天':''});}return a;}
+function phoneOk(){return /^1\d{10}$/.test(buyerPhone);}
+function canSubmit(){return !!selectedTicket()&&!!visitDate&&buyerName.length>0&&phoneOk()&&agreed;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function canNext(){if(step===1)return!!selectedId;if(step===2)return!!visitDate;if(step===3)return quantity>=1;return true;}
+function next(){if(canNext()&&step<4)step++;}
+function prev(){if(step>1)step--;}
+function genOrderNo(){const d=new Date(),p=n=>String(n).padStart(2,'0'),r=String(Math.floor(Math.random()*9e3)+1e3);return `BK${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${r}`;}
+function submit(){if(!canSubmit())return;const t=selectedTicket();const o={id:genOrderNo(),ticketId:t.id,ticketName:t.name,emoji:t.emoji,price:t.price,originalPrice:t.originalPrice,date:visitDate,quantity,total:total(),saved:saved(),buyerName,buyerPhone,status:'待使用',createdAt:new Date().toLocaleString('zh-CN',{hour12:false}),user:'预览游客'};orders.unshift(o);saveOrders();successOrder=o;mode='success';}
+function cancelOrder(id){const o=orders.find(x=>x.id===id);if(o){o.status='已取消';saveOrders();showToast('订单已取消');}}
+function reorder(o){selectedId=o.ticketId;visitDate=o.date;quantity=o.quantity;buyerName=o.buyerName||'';buyerPhone=o.buyerPhone||'';agreed=!!o.buyerName;step=1;mode='book';}
+function goOrders(){orders=loadOrders();mode='orders';}
+function goBook(){mode='book';}
+function setDate(v){if(!v)return;visitDate=v;render();}
+function setQty(n){quantity=Math.max(1,Math.min(10,n));render();}
+function refreshSubmit(){const b=document.querySelector('.submit');if(b)b.disabled=!canSubmit();const e=document.querySelector('.field-err');if(e){if(buyerPhone&&!phoneOk()){e.style.display='block';e.textContent='⚠️ 请输入 11 位有效手机号';}else{e.style.display='none';}}}
+function render(){
+  const t=selectedTicket();
+  let html='';
+  if(mode==='book'){
+    const steps=[['type','选票种'],['date','选日期'],['qty','选数量'],['confirm','确认']];
+    html+=`<header class="bk-bar"><button class="bk-back" onclick="history.back()">‹ 返回</button>
+      <h1 class="bk-title">🎫 狗熊岭在线订票</h1>
+      <button class="bk-orders-btn" onclick="goOrders()">🧾 我的订单${orders.length?`<span class="bk-orders-badge">${orders.length}</span>`:''}</button></header>`;
+    html+='<ol class="steps">'+steps.map((s,i)=>`<li class="step ${step===i+1?'on':''} ${step>i+1?'done':''}"><span class="step-dot">${step>i+1?'✓':i+1}</span><span class="step-label">${s[1]}</span></li>`).join('')+'</ol>';
+    html+='<div class="bk-card">';
+    if(step===1){
+      html+=`<h2 class="bk-h2">① 选择票种</h2><p class="bk-sub">请选择您要购买的门票类型</p><div class="tk-grid">`;
+      html+=TICKETS.map(tk=>`<button class="tk ${selectedId===tk.id?'on':''}" style="--tk:${tk.color}" onclick="selectTicket('${tk.id}')">
+        ${tk.tag==='热门'?`<span class="tk-hot">🔥 热门</span>`:(tk.discount?`<span class="tk-disc">${tk.discount}</span>`:'')}
+        <span class="tk-emoji">${tk.emoji}</span><span class="tk-name">${tk.name}</span>
+        <span class="tk-price">¥${tk.price}<small>/人</small>${tk.originalPrice>tk.price?`<s class="tk-origin">¥${tk.originalPrice}</s>`:''}</span>
+        <span class="tk-desc">${tk.desc}</span></button>`).join('');
+      html+='</div>';
+    }else if(step===2){
+      html+=`<h2 class="bk-h2">② 选择游玩日期</h2><p class="bk-sub">门票仅限所选日期当日使用，可提前 90 天预订</p>
+        <div class="day-strip">`+weekDays().map(d=>`<button class="day-card ${visitDate===d.val?'on':''}" onclick="setDate('${d.val}')">
+          ${d.badge?`<span class="day-badge">${d.badge}</span>`:''}
+          <span class="day-week">${d.week}</span><span class="day-num">${d.md}</span></button>`).join('')+`</div>
+        <div class="date-other"><span class="date-other-label">📆 其他日期</span>
+          <input class="date-input" type="date" min="${todayStr}" max="${maxDateStr}" value="${visitDate}" onchange="setDate(this.value)"></div>
+        <div class="date-selected">📅 已选：<b>${prettyDate()}</b><span class="date-week">（${weekday()}）</span></div>`;
+    }else if(step===3){
+      html+=`<h2 class="bk-h2">③ 选择数量</h2><p class="bk-sub">每张门票对应一位游客，单次最多购买 10 张</p>
+        <div class="qty-block"><div class="qty-tk"><span class="qty-emoji">${t.emoji}</span><div><div class="qty-name">${t.name}</div><div class="qty-unit">单价 ¥${t.price} / 人${t.originalPrice>t.price?`<s class="qty-origin">¥${t.originalPrice}</s>`:''}</div></div></div>
+        <div class="stepper"><button ${quantity<=1?'disabled':''} onclick="setQty(quantity-1)">−</button><span class="stepper-num">${quantity}</span><button ${quantity>=10?'disabled':''} onclick="setQty(quantity+1)">＋</button></div></div>
+        <div class="qty-quick">`+[1,2,3,4,5].map(n=>`<button class="qty-chip ${quantity===n?'on':''}" onclick="setQty(${n})">${n} 张</button>`).join('')+`</div>
+        <div class="qty-subtotal"><span>小计：${quantity} 张 × ¥${t.price}${saved()>0?`<em class="qty-saved">已省 ¥${saved()}</em>`:''}</span><b>¥${total()}</b></div>`;
+    }else{
+      html+=`<h2 class="bk-h2">④ 确认订单</h2><p class="bk-sub">请核对信息并填写取票人</p>
+        <div class="confirm">
+        <div class="confirm-row"><span class="confirm-k">票种</span><span class="confirm-v">${t.emoji} ${t.name}</span></div>
+        <div class="confirm-row"><span class="confirm-k">游玩日期</span><span class="confirm-v">${prettyDate()}（${weekday()}）</span></div>
+        <div class="confirm-row"><span class="confirm-k">购买数量</span><span class="confirm-v">${quantity} 张</span></div>
+        <div class="confirm-row"><span class="confirm-k">单价</span><span class="confirm-v">¥${t.price}${t.originalPrice>t.price?`<s class="confirm-origin">¥${t.originalPrice}</s>`:''}</span></div>
+        ${saved()>0?`<div class="confirm-row"><span class="confirm-k">已享优惠</span><span class="confirm-v saved">−¥${saved()}</span></div>`:''}
+        <div class="confirm-row total"><span class="confirm-k">应付总价</span><span class="confirm-v">¥${total()}</span></div>
+        <p class="confirm-note">🐻 提交后将生成电子订单，凭订单号在园区闸机核销入园。</p></div>
+        <div class="buyer"><h3 class="buyer-title">取票人信息</h3>
+          <div class="field"><label>姓名</label><input type="text" maxlength="12" placeholder="请输入取票人姓名" value="${esc(buyerName)}" oninput="buyerName=this.value;refreshSubmit()"></div>
+          <div class="field"><label>手机号</label><input type="tel" maxlength="11" placeholder="用于接收电子门票短信" value="${esc(buyerPhone)}" oninput="buyerPhone=this.value;refreshSubmit()"></div>
+          <p class="field-err" style="display:none"></p>
+          <label class="agree"><input type="checkbox" ${agreed?'checked':''} onchange="agreed=this.checked;refreshSubmit()"><span>我已阅读并同意《门票预订须知》，知晓门票当日有效、过期不退。</span></label>
+        </div>`;
+    }
+    html+='<div class="bk-foot">';
+    if(step>1)html+='<button class="bk-btn ghost" onclick="prev()">‹ 上一步</button>';
+    html+='<span class="bk-foot-spacer"></span>';
+    if(step<4)html+=`<button class="bk-btn primary" ${canNext()?'':'disabled'} onclick="next()">下一步 ›</button>`;
+    else html+=`<button class="bk-btn primary submit" ${canSubmit()?'':'disabled'} onclick="submit()">✅ 提交订单 · ¥${total()}</button>`;
+    html+='</div></div>';
+    html+=`<div class="price-bar"><div class="price-info"><span class="price-tk">${t?t.emoji+' '+t.name:'尚未选择票种'}</span>${t?`<span class="price-meta">${quantity} 张 × ¥${t.price}${t.originalPrice>t.price?` <s class="price-origin">¥${t.originalPrice}</s>`:''}${saved()>0?` <em class="price-saved">已省 ¥${saved()}</em>`:''}</span>`:''}</div><div class="price-total">¥${total()}</div></div>`;
+  }else if(mode==='success'){
+    const o=successOrder;
+    html+=`<header class="bk-bar"><button class="bk-back" onclick="history.back()">‹ 返回</button><h1 class="bk-title">🎫 狗熊岭在线订票</h1><span></span></header>
+      <div class="success"><div class="success-badge">✅</div><h2>预订成功！</h2><p class="success-sub">您的电子门票已生成，请妥善保管订单号</p>
+      <div class="success-order">
+      <div class="so-row"><span>订单号</span><b class="so-no">${o.id}</b></div>
+      <div class="so-row"><span>票种</span><b>${o.emoji} ${o.ticketName}</b></div>
+      <div class="so-row"><span>游玩日期</span><b>${o.date}</b></div>
+      <div class="so-row"><span>数量</span><b>${o.quantity} 张</b></div>
+      <div class="so-row"><span>取票人</span><b>${esc(o.buyerName||'—')} · ${esc(o.buyerPhone||'')}</b></div>
+      <div class="so-row total"><span>实付</span><b>¥${o.total}</b></div></div>
+      <div class="success-actions"><button class="bk-btn primary" onclick="goOrders()">🧾 查看我的订单</button><button class="bk-btn ghost" onclick="goBook()">🎫 继续预订</button></div></div>`;
+  }else{
+    html+=`<header class="bk-bar"><button class="bk-back" onclick="history.back()">‹ 返回</button><h1 class="bk-title">🎫 狗熊岭在线订票</h1><span></span></header>
+      <div class="orders-head"><h2 class="bk-h2">🧾 我的订单</h2><button class="bk-btn ghost sm" style="border:2px solid var(--wood-light);border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer" onclick="goBook()">＋ 去订票</button></div>`;
+    if(orders.length){
+      html+='<div class="order-list">'+orders.map(o=>`<article class="order ${o.status==='已取消'?'cancelled':''}">
+        <div class="order-top"><span class="order-tk">${o.emoji} ${o.ticketName}</span><span class="order-status ${o.status==='已取消'?'st-cancel':'st-ok'}">${o.status}</span></div>
+        <div class="order-no">订单号：<b>${o.id}</b><span class="order-buyer">取票人：${esc(o.buyerName||'—')}</span></div>
+        <div class="order-grid"><div><span>游玩日期</span><b>${o.date}</b></div><div><span>数量</span><b>${o.quantity} 张</b></div><div><span>下单时间</span><b>${o.createdAt}</b></div></div>
+        <div class="order-foot"><span class="order-total">合计<b>¥${o.total}</b></span><div class="order-ops">
+        ${o.status!=='已取消'?`<button class="op-btn danger" onclick="cancelOrder('${o.id}')">取消订单</button>`:''}
+        <button class="op-btn" onclick="reorder('${o.id}')">再次预订</button></div></div></article>`).join('')+'</div>';
+    }else{
+      html+=`<div class="order-empty">🍃 还没有订单，去挑一张门票开启森林之旅吧～<div class="order-empty-cta"><button class="bk-btn primary" onclick="goBook()">🎫 立即订票</button></div></div>`;
+    }
+  }
+  html+=toast?`<div class="bk-toast">${toast}</div>`:'';
+  root.innerHTML=html;
+}
+window.selectTicket=id=>{selectedId=id;render();};
+window.next=next;window.prev=prev;window.submit=submit;window.cancelOrder=cancelOrder;
+window.reorder=id=>{const o=orders.find(x=>x.id===id);if(o){reorder(o);render();}};
+window.setDate=setDate;window.setQty=setQty;window.refreshSubmit=refreshSubmit;
+window.goOrders=goOrders;window.goBook=goBook;
+render();
+</script>
+</body>
+</html>
