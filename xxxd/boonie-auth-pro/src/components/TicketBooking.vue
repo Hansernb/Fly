@@ -164,9 +164,16 @@
               <span class="confirm-k">已享优惠</span>
               <span class="confirm-v saved">−¥{{ saved }}</span>
             </div>
+            <div v-if="pointsDiscountValue > 0" class="confirm-row">
+              <span class="confirm-k">积分抵扣</span>
+              <span class="confirm-v saved">−¥{{ pointsDiscountValue }}（{{ usePointsOn ? pointsToUse : 0 }} 积分）</span>
+            </div>
             <div class="confirm-row total">
-              <span class="confirm-k">应付总价</span>
-              <span class="confirm-v">¥{{ total }}</span>
+              <span class="confirm-k">{{ pointsDiscountValue > 0 ? '实付金额' : '应付总价' }}</span>
+              <span class="confirm-v">
+                ¥{{ payable }}
+                <s v-if="pointsDiscountValue > 0" class="confirm-origin">¥{{ total }}</s>
+              </span>
             </div>
             <p class="confirm-note">🐻 提交后将生成电子订单，凭订单号在园区闸机核销入园。</p>
           </div>
@@ -201,6 +208,80 @@
               <span>我已阅读并同意《门票预订须知》，知晓门票当日有效、过期不退。</span>
             </label>
           </div>
+
+          <!-- 会员积分抵扣 -->
+          <div class="member-panel" :class="{ on: usePointsOn }">
+            <div class="mp-head">
+              <span class="mp-icon">💎</span>
+              <div class="mp-info">
+                <b>森林会员 · 积分抵扣</b>
+                <span v-if="memberLoading" class="mp-sub">正在查询会员…</span>
+                <span v-else-if="memberInfo" class="mp-sub">
+                  {{ memberInfo.levelName }} · 可用 <b class="mp-pts">{{ memberInfo.totalPoints }}</b> 积分
+                  <em v-if="memberInfo.phone">（{{ maskPhone(memberInfo.phone) }}）</em>
+                </span>
+                <span v-else class="mp-sub">
+                  {{ phoneOk ? '该手机号还未开通会员，下单后自动开通' : '填写手机号后自动识别会员，无需单独注册' }}
+                </span>
+              </div>
+              <button
+                v-if="maxPointsUsable > 0"
+                class="mp-switch"
+                :class="{ on: usePointsOn }"
+                type="button"
+                @click="toggleUsePoints"
+              >
+                {{ usePointsOn ? '✓ 已使用积分' : '使用积分抵扣' }}
+              </button>
+            </div>
+
+            <div v-if="usePointsOn && maxPointsUsable > 0" class="mp-body">
+              <div class="mp-scale">
+                <span>0</span>
+                <span>最多 {{ maxPointsUsable }} 积分（抵 ¥{{ maxDiscount }}）</span>
+              </div>
+              <input
+                v-model.number="pointsToUse"
+                class="mp-range"
+                type="range"
+                min="0"
+                :max="maxPointsUsable"
+                step="1"
+              />
+              <div class="mp-quick">
+                <button
+                  v-for="n in quickPoints"
+                  :key="n"
+                  type="button"
+                  class="mp-chip"
+                  :class="{ on: pointsToUse === n }"
+                  @click="pointsToUse = n"
+                >
+                  {{ n }} 积分
+                </button>
+                <button type="button" class="mp-chip" :class="{ on: pointsToUse === maxPointsUsable }" @click="pointsToUse = maxPointsUsable">
+                  全部抵扣
+                </button>
+              </div>
+              <div class="mp-calc">
+                <div class="mp-calc-row">
+                  <span>积分抵扣（1 积分 = ¥0.3）</span>
+                  <b class="mp-minus">−¥{{ pointsDiscountValue }}</b>
+                </div>
+                <div class="mp-calc-row">
+                  <span>抵扣后应付</span>
+                  <b class="mp-pay">¥{{ payable }}</b>
+                </div>
+                <div class="mp-calc-row small">
+                  <span>支付后可得积分</span>
+                  <b class="mp-gain">+{{ willEarn }}</b>
+                </div>
+              </div>
+            </div>
+            <p v-else class="mp-tip">
+              1 积分抵 ¥0.3，单笔最多抵扣订单金额的 50%；支付成功后按实付金额 1 元 = 1 积分到账。
+            </p>
+          </div>
         </div>
 
         <!-- 底部导航 -->
@@ -223,7 +304,7 @@
             :disabled="!canSubmit || submitting"
             @click="submit"
           >
-            {{ submitting ? '⏳ 正在提交…' : `✅ 提交订单 · ¥${total}` }}
+            {{ submitting ? '⏳ 正在提交…' : `✅ 提交订单 · ¥${payable}` }}
           </button>
         </div>
       </div>
@@ -238,7 +319,10 @@
             <em v-if="saved > 0" class="price-saved">已省 ¥{{ saved }}</em>
           </span>
         </div>
-        <div class="price-total">¥{{ total }}</div>
+        <div class="price-total">
+          <span v-if="pointsDiscountValue > 0" class="price-total-sub">积分抵扣</span>
+          ¥{{ payable }}
+        </div>
       </div>
     </section>
 
@@ -252,12 +336,40 @@
           <div class="so-row"><span>订单号</span><b class="so-no">{{ successOrder.id }}</b></div>
           <div class="so-row"><span>票种</span><b>{{ successOrder.emoji }} {{ successOrder.ticketName }}</b></div>
           <div class="so-row"><span>游玩日期</span><b>{{ successOrder.date }}</b></div>
-          <div class="so-row"><span>数量</span><b>{{ successOrder.quantity }} 张</b></div>
+          <div class="so-row">
+            <span>数量</span><b>{{ successOrder.quantity }} 张</b>
+          </div>
           <div class="so-row"><span>取票人</span><b>{{ successOrder.buyerName }} · {{ successOrder.buyerPhone }}</b></div>
+          <div v-if="successOrder.pointsDiscount > 0" class="so-row">
+            <span>积分抵扣</span><b class="so-minus">−¥{{ successOrder.pointsDiscount }}（{{ successOrder.pointsUsed }} 积分）</b>
+          </div>
           <div class="so-row total"><span>实付</span><b>¥{{ successOrder.total }}</b></div>
+        </div>
+
+        <!-- 会员自动开通提示 -->
+        <div v-if="successOrder.member" class="success-member">
+          <div class="sm-top">
+            <span class="sm-icon">{{ successOrder.member.levelIcon || '💎' }}</span>
+            <div class="sm-txt">
+              <b v-if="successOrder.isNewMember">🎉 已自动开通会员，获得 {{ successOrder.pointsEarned }} 积分</b>
+              <b v-else>🎉 会员积分已到账 +{{ successOrder.pointsEarned }}</b>
+              <span>
+                {{ successOrder.member.nickname }} · {{ successOrder.member.levelName }}
+                · 可用 {{ successOrder.member.totalPoints }} / 累计 {{ successOrder.member.cumPoints }} 积分
+              </span>
+            </div>
+          </div>
+          <div class="sm-bar">
+            <div class="sm-bar-fill" :style="{ width: successOrder.member.progress + '%' }"></div>
+          </div>
+          <p class="sm-tip">
+            再获得 {{ successOrder.member.nextNeed }} 积分可升级为
+            <b>{{ successOrder.member.nextLevelName }}</b>；下次下单可用积分抵扣（1 积分 = ¥0.3）。
+          </p>
         </div>
         <div class="success-actions">
           <button class="bk-btn primary" type="button" @click="goOrders">🧾 查看我的订单</button>
+          <button v-if="successOrder.member" class="bk-btn honey" type="button" @click="$emit('member')">💎 我的会员卡</button>
           <button class="bk-btn ghost" type="button" @click="goBook">🎫 继续预订</button>
         </div>
       </div>
@@ -295,7 +407,10 @@
             <div><span>下单时间</span><b>{{ o.createdAt }}</b></div>
           </div>
           <div class="order-foot">
-            <span class="order-total">合计 <b>¥{{ o.total }}</b></span>
+            <span class="order-total">
+              <span v-if="o.pointsDiscount > 0" class="order-pts">积分抵扣 −¥{{ o.pointsDiscount }}</span>
+              合计 <b>¥{{ o.total }}</b>
+            </span>
             <div class="order-ops">
               <button
                 v-if="o.status !== '已取消'"
@@ -326,15 +441,25 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { TICKETS, loadTickets } from '../data/tickets.js'
+import {
+  POINT_RULES,
+  MEMBER_PHONE_KEY,
+  maxDeductPoints,
+  discountOf,
+  earnedOf,
+  decorate,
+  loadLocalMember,
+  localAddPoints
+} from '../data/member.js'
 
 const props = defineProps({
   user: { type: Object, default: null },
   token: { type: String, default: '' },
   initialTicketId: { type: String, default: '' }
 })
-const emit = defineEmits(['back'])
+const emit = defineEmits(['back', 'member'])
 
 const steps = [
   { key: 'type', label: '选票种' },
@@ -442,6 +567,86 @@ const canSubmit = computed(
     agreed.value
 )
 
+/* ===================== 会员积分 ===================== */
+const memberInfo = ref(null)
+const memberLoading = ref(false)
+const usePointsOn = ref(false)
+const pointsToUse = ref(0)
+let memberTimer = 0
+
+/** 本单最多可用积分（受余额与 50% 上限双重约束） */
+const maxPointsUsable = computed(() => maxDeductPoints(memberInfo.value?.totalPoints || 0, total.value))
+const maxDiscount = computed(() => discountOf(maxPointsUsable.value))
+const pointsDiscountValue = computed(() =>
+  usePointsOn.value ? discountOf(Math.min(pointsToUse.value, maxPointsUsable.value)) : 0
+)
+/** 抵扣后实付 */
+const payable = computed(() => Math.max(0, Math.round((total.value - pointsDiscountValue.value) * 100) / 100))
+/** 本单支付后可得积分：1 元 = 1 积分 */
+const willEarn = computed(() => earnedOf(payable.value))
+
+const quickPoints = computed(() => {
+  const max = maxPointsUsable.value
+  if (max <= 0) return []
+  return [...new Set([Math.floor(max / 2), max].filter((n) => n > 0 && n <= max))]
+})
+
+function maskPhone(p) {
+  return p ? p.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : ''
+}
+
+function clampPoints() {
+  if (pointsToUse.value > maxPointsUsable.value) pointsToUse.value = maxPointsUsable.value
+  if (maxPointsUsable.value <= 0) {
+    usePointsOn.value = false
+    pointsToUse.value = 0
+  }
+}
+
+function toggleUsePoints() {
+  if (usePointsOn.value) {
+    usePointsOn.value = false
+    pointsToUse.value = 0
+    return
+  }
+  usePointsOn.value = true
+  pointsToUse.value = maxPointsUsable.value
+}
+
+/** 手机号 / 金额变化 → 查询会员与可抵扣额度（防抖） */
+function scheduleMemberLookup() {
+  clearTimeout(memberTimer)
+  if (!phoneOk.value) {
+    memberInfo.value = null
+    usePointsOn.value = false
+    pointsToUse.value = 0
+    return
+  }
+  memberTimer = setTimeout(fetchMember, 360)
+}
+
+async function fetchMember() {
+  if (!phoneOk.value) return
+  memberLoading.value = true
+  try {
+    const res = await fetch(
+      `/api/member/preview?phone=${buyerPhone.value}&amount=${total.value}`
+    )
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const json = await res.json()
+    const m = json?.data?.member
+    memberInfo.value = m ? decorate(m) : null
+  } catch {
+    // 后端不可达时用本地会员档案兜底，保证演示流程完整
+    memberInfo.value = loadLocalMember(buyerPhone.value)
+  } finally {
+    memberLoading.value = false
+    clampPoints()
+  }
+}
+
+watch([buyerPhone, total], scheduleMemberLookup)
+
 /* ===================== 交互 ===================== */
 function selectTicket(id) {
   selectedId.value = id
@@ -475,6 +680,10 @@ function normalizeOrder(o) {
     date: o.date,
     quantity: Number(o.quantity) || 1,
     total: Number(o.total) || 0,
+    grossAmount: Number(o.grossAmount) || Number(o.total) || 0,
+    pointsUsed: Number(o.pointsUsed) || 0,
+    pointsDiscount: Number(o.pointsDiscount) || 0,
+    pointsEarned: Number(o.pointsEarned) || 0,
     saved: Number(o.saved) || 0,
     buyerName: o.buyerName || '',
     buyerPhone: o.buyerPhone || '',
@@ -524,8 +733,14 @@ async function loadOrders() {
   }
 }
 
-/** 后端不可用时的本地兜底下单，保证演示流程不中断 */
+/** 后端不可用时的本地兜底下单，保证演示流程不中断（含会员积分本地记账） */
 function createLocalOrder() {
+  const used = pointsDiscountValue.value > 0 ? Math.min(pointsToUse.value, maxPointsUsable.value) : 0
+  const discount = used > 0 ? discountOf(used) : 0
+  const paid = Math.max(0, Math.round((total.value - discount) * 100) / 100)
+  const earned = earnedOf(paid)
+  const existed = !!loadLocalMember(buyerPhone.value)
+
   const order = {
     id: genOrderNo(),
     ticketId: selectedTicket.value.id,
@@ -535,13 +750,43 @@ function createLocalOrder() {
     originalPrice: selectedTicket.value.originalPrice,
     date: visitDate.value,
     quantity: quantity.value,
-    total: total.value,
+    grossAmount: total.value,
+    total: paid,
+    pointsUsed: used,
+    pointsDiscount: discount,
+    pointsEarned: earned,
     saved: saved.value,
     buyerName: buyerName.value,
     buyerPhone: buyerPhone.value,
     status: '待使用',
     createdAt: new Date().toLocaleString('zh-CN', { hour12: false }),
     user: props.user?.name || '游客'
+  }
+
+  // 本地会员积分：先抵扣、后赠送
+  if (used > 0) {
+    localAddPoints(buyerPhone.value, {
+      type: '抵扣',
+      points: -used,
+      orderNo: order.id,
+      remark: `订单抵扣 ¥${discount.toFixed(2)}`,
+      nickname: buyerName.value
+    })
+  }
+  const m = localAddPoints(buyerPhone.value, {
+    type: '获取',
+    points: earned,
+    orderNo: order.id,
+    remark: `购票实付 ¥${paid.toFixed(2)} 获得积分`,
+    nickname: buyerName.value
+  })
+  order.member = m
+  order.isNewMember = !existed
+
+  try {
+    localStorage.setItem(MEMBER_PHONE_KEY, buyerPhone.value)
+  } catch {
+    /* 忽略 */
   }
   orders.value.unshift(order)
   cacheOrders(orders.value)
@@ -554,13 +799,8 @@ async function submit() {
   const ticket = selectedTicket.value
   if (!ticket) return
 
-  // 未登录：继续走本地模式
-  if (!props.token) {
-    createLocalOrder()
-    showToast('⚠️ 未登录，订单已暂存在本机')
-    return
-  }
-
+  // 未登录也直接走后端：手机号下单即自动开通会员（后端支持游客订单）；
+  // 后端不可达时降级本地，保证演示流程不中断
   submitting.value = true
   try {
     const res = await fetch('/api/orders', {
@@ -571,7 +811,8 @@ async function submit() {
         quantity: quantity.value,
         visitDate: visitDate.value,
         buyerName: buyerName.value,
-        buyerPhone: buyerPhone.value
+        buyerPhone: buyerPhone.value,
+        usePoints: pointsDiscountValue.value > 0 ? Math.min(pointsToUse.value, maxPointsUsable.value) : 0
       })
     })
     const json = await res.json().catch(() => ({}))
@@ -584,12 +825,22 @@ async function submit() {
       throw new Error('HTTP ' + res.status)
     }
     const order = normalizeOrder(json.data)
+    order.member = json.member ? decorate(json.member) : null
+    order.isNewMember = !!json.isNewMember
+    order.pointsEarned = Number(json.pointsEarned) || order.pointsEarned
+    order.pointsUsed = Number(json.pointsUsed) || order.pointsUsed
+    order.pointsDiscount = Number(json.pointsDiscount) || order.pointsDiscount
+    try {
+      localStorage.setItem(MEMBER_PHONE_KEY, buyerPhone.value)
+    } catch {
+      /* 忽略 */
+    }
     orders.value.unshift(order)
     cacheOrders(orders.value)
     ordersFromApi.value = true
     successOrder.value = order
     mode.value = 'success'
-    showToast('🎫 订单已生成并写入数据库')
+    showToast(json.message || '🎫 订单已生成并写入数据库')
   } catch {
     createLocalOrder()
     showToast('⚠️ 数据库暂时连不上，订单已暂存在本机')
@@ -650,6 +901,18 @@ function showToast(msg) {
 }
 
 onMounted(async () => {
+  // 渐显卡片：订票页独立路由，没有首页的 IntersectionObserver 来触发，
+  // 这里直接标记可见，否则 .reveal 会一直保持 opacity: 0（历史遗留 bug）
+  nextTick(() => {
+    document.querySelectorAll('.booking .reveal').forEach((el) => el.classList.add('is-visible'))
+  })
+  // 记住上次下单手机号：再次下单自动带出，等同「会员自动登录」
+  try {
+    const savedPhone = localStorage.getItem(MEMBER_PHONE_KEY)
+    if (savedPhone && !buyerPhone.value) buyerPhone.value = savedPhone
+  } catch {
+    /* 忽略 */
+  }
   loadOrders()
   // 从首页某张票卡「立即预订」进入时，预选该票种并直接到选日期
   if (props.initialTicketId) {
@@ -1640,4 +1903,256 @@ onMounted(async () => {
     margin-left: 64px;
   }
 }
+
+/* ===================== 会员积分（结算页） ===================== */
+.member-panel {
+  margin-top: 18px;
+  background: linear-gradient(150deg, #f7fbef, #fffaf0 60%, #fff4dc);
+  border: 2px dashed rgba(169, 116, 60, 0.5);
+  border-radius: 18px;
+  padding: 16px 18px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.member-panel.on {
+  border-style: solid;
+  border-color: var(--honey);
+  box-shadow: 0 10px 26px -18px rgba(255, 183, 3, 0.9);
+}
+.mp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mp-icon {
+  flex: 0 0 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, #ffe9a8, #ffcf42);
+  box-shadow: 0 6px 14px -8px rgba(224, 155, 0, 0.9);
+}
+.mp-info {
+  flex: 1;
+  min-width: 0;
+}
+.mp-info b {
+  display: block;
+  font-size: 14px;
+  color: var(--forest-deep);
+}
+.mp-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.mp-sub .mp-pts {
+  color: #d98600;
+  font-size: 14px;
+}
+.mp-sub em {
+  font-style: normal;
+  opacity: 0.75;
+}
+.mp-switch {
+  flex: 0 0 auto;
+  border: 2px solid var(--honey);
+  background: #fff;
+  color: #a9740a;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+.mp-switch:hover {
+  background: #fff6dd;
+}
+.mp-switch.on {
+  background: linear-gradient(180deg, #ffd23f, var(--honey));
+  color: #5a3d00;
+  box-shadow: 0 4px 0 #e09b00;
+}
+.mp-body {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px dashed rgba(200, 155, 99, 0.35);
+}
+.mp-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.mp-range {
+  width: 100%;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--honey), #ffd97a);
+  outline: none;
+  cursor: pointer;
+}
+.mp-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--honey);
+  box-shadow: 0 3px 8px rgba(169, 116, 10, 0.35);
+  cursor: pointer;
+}
+.mp-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 12px;
+}
+.mp-chip {
+  border: 2px solid rgba(47, 125, 79, 0.18);
+  background: #fff;
+  color: var(--forest-deep);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.mp-chip:hover {
+  border-color: var(--honey);
+}
+.mp-chip.on {
+  background: #fff6dd;
+  border-color: var(--honey);
+  color: #a9740a;
+}
+.mp-calc {
+  background: #fffdf6;
+  border: 2px solid rgba(200, 155, 99, 0.28);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+.mp-calc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 4px 0;
+}
+.mp-calc-row.small {
+  font-size: 12px;
+  border-top: 1px dashed rgba(200, 155, 99, 0.35);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+.mp-minus {
+  color: var(--danger);
+}
+.mp-pay {
+  color: var(--forest-deep);
+  font-size: 17px;
+}
+.mp-gain {
+  color: #d98600;
+}
+.mp-tip {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* 成功页会员卡 */
+.success-member {
+  margin-top: 16px;
+  text-align: left;
+  background: linear-gradient(150deg, #fff8e4, #f4fbe9 65%, #fff);
+  border: 2px solid var(--honey);
+  border-radius: 18px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 12px 26px -20px rgba(224, 155, 0, 0.9);
+}
+.sm-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sm-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+.sm-txt b {
+  display: block;
+  font-size: 14px;
+  color: var(--forest-deep);
+  margin-bottom: 4px;
+}
+.sm-txt span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.sm-bar {
+  margin: 10px 0 6px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(47, 125, 79, 0.12);
+  overflow: hidden;
+}
+.sm-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--honey), #ffe08a);
+  transition: width 0.5s ease;
+}
+.sm-tip {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.sm-tip b {
+  color: #a9740a;
+}
+.bk-btn.honey {
+  background: linear-gradient(180deg, #5cc07c, var(--forest));
+  color: #fff;
+  box-shadow: 0 5px 0 #1d5c39;
+}
+.bk-btn.honey:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #1d5c39;
+}
+.order-pts {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #a9740a;
+  background: rgba(255, 183, 3, 0.16);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.price-total-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.5px;
+}
+.so-minus {
+  color: var(--danger);
+}
+
 </style>

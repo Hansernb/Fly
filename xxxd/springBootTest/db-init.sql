@@ -252,12 +252,47 @@ CREATE TABLE IF NOT EXISTS `boonie_ticket_order` (
   `buyer_phone` varchar(20) NOT NULL COMMENT '取票人手机号',
   `status` varchar(16) NOT NULL DEFAULT '待使用' COMMENT '待使用/已取消/已使用',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `member_id` bigint DEFAULT NULL COMMENT '会员 id（下单手机号对应的会员档案）',
+  `gross_amount` decimal(10,2) NOT NULL DEFAULT 0 COMMENT '积分抵扣前金额',
+  `points_used` int NOT NULL DEFAULT 0 COMMENT '使用的积分',
+  `points_discount` decimal(10,2) NOT NULL DEFAULT 0 COMMENT '积分抵扣金额',
+  `points_earned` int NOT NULL DEFAULT 0 COMMENT '本单获得的积分',
   `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE INDEX `uk_order_no`(`order_no`),
   INDEX `idx_order_user`(`user_id`),
   INDEX `idx_order_visit`(`visit_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 会员表（下单手机号自动建档） ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_member` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `phone` varchar(20) NOT NULL COMMENT '手机号（会员唯一标识）',
+  `nickname` varchar(64) DEFAULT NULL COMMENT '昵称',
+  `avatar` varchar(16) DEFAULT '🐻' COMMENT '头像 emoji',
+  `total_points` int NOT NULL DEFAULT 0 COMMENT '当前可用积分',
+  `cum_points` int NOT NULL DEFAULT 0 COMMENT '累计获得积分（决定等级）',
+  `level_name` varchar(16) NOT NULL DEFAULT '普通会员' COMMENT '普通会员/白银会员/黄金会员',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uk_member_phone`(`phone`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 积分明细表 ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_point_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `member_id` bigint NOT NULL COMMENT '会员 id',
+  `log_type` varchar(16) NOT NULL COMMENT '获取 / 抵扣 / 退款 / 扣回',
+  `points` int NOT NULL COMMENT '积分变动（获取为正、抵扣为负）',
+  `balance` int NOT NULL DEFAULT 0 COMMENT '变动后余额',
+  `order_no` varchar(32) DEFAULT NULL COMMENT '关联订单号',
+  `remark` varchar(128) DEFAULT NULL,
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_log_member`(`member_id`),
+  INDEX `idx_log_order`(`order_no`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 -- ---------------------------- 小游戏成绩表 ----------------------------

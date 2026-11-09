@@ -67,7 +67,7 @@
 - `PUT /api/admin/users/{id}` — body `{ permission: 0|1 }` 改权限；`{ password }` 重置明文密码（不能取消自己的管理员）
 
 ## 文件地图
-- `src/main/java/com/fenglin/springboottest/` — 主类 / AuthController / UserController / AttractionController / service / mapper / entity(User→boonie_user 表；Attraction→boonie_attraction 表；Review→boonie_review 表)
+- `src/main/java/com/fenglin/springboottest/` — 主类 / AuthController / UserController / AttractionController / TicketOrderController / MemberController / GameScoreController / service(MemberService) / mapper(MemberMapper/PointLogMapper) / entity(User→boonie_user、Attraction→boonie_attraction、Review→boonie_review、Member→boonie_member、PointLog→boonie_point_log、TicketOrder→boonie_ticket_order) / common(SchemaInitializer 自动建表补列) / config(AppConfig 全局 CORS)
 - `src/main/resources/application-dev.properties` — 端口 8080、MySQL 连接（本文件含数据库密码，勿外传）
 - `start.bat` / `stop.bat` / `db-init.sql` — 运维脚本（db-init.sql 已含 boonie_attraction / boonie_review 建表；种子数据由 DataInitializer 在表空时写入）
 - `log/xx.log` — 运行日志（排错先看这里）
@@ -88,3 +88,16 @@
 - `GET /api/games/leaderboard` — 三款游戏 Top10（无需登录）
 - 前端对应：`src/data/tickets.js` 的 `TICKETS` 是响应式数组 + `loadTickets()`（接口失败自动降级内置票库）；`TicketBooking.vue` 订单走 `/api/orders`，未登录/断网降级 localStorage；`ForestGames.vue` 成绩走 `/api/games/scores`
 - ⚠️ 改了后端 Java 需重启 8080 进程（`stop.bat` + `start.bat`）新接口才生效
+
+## 会员积分体系（2026-11 新增，已落库）
+- 表：`boonie_member`（phone/nickname/avatar/total_points/cum_points/level_name，phone 唯一）、`boonie_point_log`（member_id/log_type/points/balance/order_no/remark）；`boonie_ticket_order` 新增 5 列：member_id/gross_amount/points_used/points_discount/points_earned。全部建表由 `SchemaInitializer`（ApplicationRunner + JdbcTemplate，幂等检查 information_schema）启动时自动迁移，db-init.sql 同步更新
+- 规则：**手机号下单即自动开通会员**（无需注册/登录，游客也可下单）；1 元 = 1 积分（FLOOR 取整，按实付金额计）；积分抵扣 1 积分 = 0.3 元，单笔最多抵 50%：`maxDeductible = min(余额, floor(金额×0.5÷0.3))`；实付最低 0.01 元；等级按**累计积分**（不因退款回退）：≥2000 黄金 / ≥500 白银 / 其余普通
+- 常量集中在 `service/MemberService.java`（YUAN_PER_POINT=0.3、MAX_DEDUCT_RATIO=0.5、SILVER_AT=500、GOLD_AT=2000）
+- 接口：
+  - `GET /api/member?phone=` — 会员信息 + 积分明细 logs（不存在返回 404，前端降级本地）
+  - `GET /api/member/preview?phone=&amount=` — 抵扣预览 `{ isMember, maxPoints, maxDiscount }`
+  - `POST /api/member/profile` — 改昵称/头像 `{ phone, nickname, avatar }`
+- 下单流程（TicketOrderController）：isNewMember → getOrCreate → maxUse=maxDeductible → usePoints=min(前端传入, maxUse) → paid=gross−discount → earned=floor(paid) → 先插订单后 `memberService.record` 写两条流水（抵扣 −usePoints / 获取 +earned）；返回多带 `member / pointsEarned / isNewMember / message`（前端弹「已自动开通会员，获得 XX 积分」）
+- 取消订单：`cancel` 调 `memberService.rollback`（抵扣积分全额退还，赚取积分扣回；cum_points 不回退）
+- 游戏成绩 `GAME_NAMES` 白名单已含 `run`（森林跑酷）
+- **CORS（重要）**：浏览器对同源 POST fetch 也会带 Origin 头，旧的 `@CrossOrigin(origins="http://localhost:5173")` 在前端换端口（如 5174）时报 403 "Invalid CORS request"（curl 测不出，因为 curl 不带 Origin）。已改为 `config/AppConfig.java` 全局 `allowedOriginPatterns("*")`，勿再回退成写死来源

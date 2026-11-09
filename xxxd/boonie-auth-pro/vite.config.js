@@ -53,6 +53,7 @@ const backendPort = resolveBackendPort()
 export default defineConfig({
   plugins: [vue()],
   server: {
+    host: true, // 绑定 0.0.0.0：127.0.0.1 / localhost / 局域网 IP 都能访问（默认只绑 IPv6 ::1，IPv4 打不开）
     port: 5173,
     open: true,
     proxy: {

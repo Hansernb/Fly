@@ -47,6 +47,9 @@
         </button>
 
         <div class="nav-user">
+          <button class="member-pill" type="button" title="森林会员中心" @click="$emit('member')">
+            💎 会员中心
+          </button>
           <button
             class="avatar-btn"
             type="button"
@@ -74,6 +77,12 @@
             :class="{ active: activeMenu === m.id }"
             @click="goSection(m.id)"
             >{{ m.icon }} {{ m.label }}</a
+          >
+          <a
+            href="javascript:void(0)"
+            class="drawer-link drawer-member"
+            @click="menuOpen = false; $emit('member')"
+            >💎 会员中心</a
           >
         </nav>
       </transition>
@@ -363,7 +372,7 @@
     <section id="games" class="section reveal">
       <div class="section-head">
         <h2 class="section-title">🎮 森林小游戏</h2>
-        <span class="games-count">3 款小游戏 · 随时开局</span>
+        <span class="games-count">4 款小游戏 · 随时开局</span>
       </div>
 
       <div class="games-entry">
@@ -653,7 +662,7 @@ const props = defineProps({
   user: { type: Object, required: true },
   token: { type: String, required: true }
 })
-const emit = defineEmits(['logout', 'admin', 'attractions', 'tickets', 'games'])
+const emit = defineEmits(['logout', 'admin', 'attractions', 'tickets', 'games', 'member'])
 
 /* 仅管理员（permission === 0）才显示「后台管理系统」入口 */
 const isAdmin = computed(() => Number(props.user?.permission) === 0)
@@ -1517,6 +1526,30 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   align-items: center;
   gap: 10px;
   white-space: nowrap;
+}
+/* 导航栏「会员中心」入口 */
+.member-pill {
+  border: 2px solid var(--honey);
+  background: linear-gradient(180deg, #fff7df, #ffe9a8);
+  color: #7a5200;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 7px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+.member-pill:hover {
+  background: linear-gradient(180deg, #ffe9a8, #ffd23f);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px -8px rgba(224, 155, 0, 0.95);
+}
+.drawer-member {
+  margin-top: 6px;
+  border-top: 1px dashed rgba(200, 155, 99, 0.45);
+  border-radius: 0 0 12px 12px;
+  color: #a9740a;
 }
 /* 导航栏用户头像（public/img/avatar.jpg） */
 .nav-avatar {

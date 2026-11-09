@@ -2,12 +2,14 @@ package com.fenglin.springboottest.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fenglin.springboottest.common.BizException;
+import com.fenglin.springboottest.entity.Member;
 import com.fenglin.springboottest.entity.Ticket;
 import com.fenglin.springboottest.entity.TicketOrder;
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.mapper.TicketMapper;
 import com.fenglin.springboottest.mapper.TicketOrderMapper;
 import com.fenglin.springboottest.service.AuthService;
+import com.fenglin.springboottest.service.MemberService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -47,6 +50,8 @@ public class TicketOrderController {
     private TicketMapper ticketMapper;
     @Autowired
     private AuthService authService;
+    @Autowired
+    private MemberService memberService;
 
     /** 提交订单：{ ticketId(票种编码或数据库 id), quantity, visitDate, buyerName, buyerPhone } */
     @PostMapping("/orders")
@@ -78,6 +83,22 @@ public class TicketOrderController {
         BigDecimal origin = ticket.getOriginalPrice() == null ? unit : ticket.getOriginalPrice();
         if (origin.compareTo(unit) < 0) origin = unit;
         BigDecimal qtyDec = BigDecimal.valueOf(qty);
+        BigDecimal gross = unit.multiply(qtyDec);
+
+        // ===== 会员：手机号自动建档（无需单独注册），同号再次下单自动「登录」 =====
+        boolean isNewMember = memberService.findByPhone(buyerPhone) == null;
+        Member member = memberService.getOrCreate(buyerPhone, buyerName);
+
+        // ===== 积分抵扣：1 积分 = 0.3 元，单笔最多抵扣金额的 50% =====
+        int maxUse = memberService.maxDeductible(member, gross);
+        int wantUse = Math.max(0, intOf(body.get("usePoints"), 0));
+        int usePoints = Math.min(wantUse, maxUse);
+        BigDecimal discount = memberService.discountOf(usePoints);
+        BigDecimal paid = gross.subtract(discount);
+        if (paid.compareTo(new BigDecimal("0.01")) < 0) paid = new BigDecimal("0.01");
+        paid = paid.setScale(2, RoundingMode.HALF_UP);
+        // 实付 1 元 = 1 积分（向下取整）
+        int earned = paid.setScale(0, RoundingMode.FLOOR).intValue();
 
         TicketOrder o = new TicketOrder();
         o.setOrderNo(nextOrderNo());
@@ -90,7 +111,12 @@ public class TicketOrderController {
         o.setUnitPrice(unit);
         o.setOriginalPrice(origin);
         o.setQuantity(qty);
-        o.setTotalAmount(unit.multiply(qtyDec));
+        o.setGrossAmount(gross);
+        o.setTotalAmount(paid);
+        o.setPointsUsed(usePoints);
+        o.setPointsDiscount(discount);
+        o.setPointsEarned(earned);
+        o.setMemberId(member.getId());
         o.setSavedAmount(origin.subtract(unit).multiply(qtyDec));
         o.setVisitDate(visitDate);
         o.setBuyerName(buyerName);
@@ -100,8 +126,26 @@ public class TicketOrderController {
         o.setUpdatedAt(LocalDateTime.now());
         orderMapper.insert(o);
 
+        // ===== 积分流水：先抵扣、再按实付金额赠送 =====
+        if (usePoints > 0) {
+            memberService.record(member, -usePoints, "抵扣", o.getOrderNo(),
+                    "订单抵扣 ¥" + discount.toPlainString());
+        }
+        if (earned > 0) {
+            memberService.record(member, earned, "获取", o.getOrderNo(),
+                    "购票实付 ¥" + paid.toPlainString() + " 获得积分");
+        }
+        Member latest = memberService.findByPhone(buyerPhone);
+
         Map<String, Object> out = ok(orderMap(o));
-        out.put("message", "下单成功");
+        out.put("member", memberService.toMap(latest));
+        out.put("pointsEarned", earned);
+        out.put("pointsUsed", usePoints);
+        out.put("pointsDiscount", discount);
+        out.put("isNewMember", isNewMember);
+        out.put("message", isNewMember
+                ? "下单成功，已自动开通会员，获得 " + earned + " 积分"
+                : "下单成功，获得 " + earned + " 积分");
         return out;
     }
 
@@ -141,8 +185,11 @@ public class TicketOrderController {
         o.setUpdatedAt(LocalDateTime.now());
         orderMapper.updateById(o);
 
+        // 积分回滚：退回已抵扣积分、扣回本单赠送积分
+        memberService.rollback(o);
+
         Map<String, Object> out = ok(orderMap(o));
-        out.put("message", "订单已取消");
+        out.put("message", "订单已取消，积分已同步回滚");
         return out;
     }
 
@@ -184,6 +231,10 @@ public class TicketOrderController {
         m.put("date", o.getVisitDate() == null ? "" : o.getVisitDate().toString());
         m.put("quantity", o.getQuantity());
         m.put("total", o.getTotalAmount());
+        m.put("grossAmount", o.getGrossAmount() == null ? o.getTotalAmount() : o.getGrossAmount());
+        m.put("pointsUsed", o.getPointsUsed() == null ? 0 : o.getPointsUsed());
+        m.put("pointsDiscount", o.getPointsDiscount() == null ? BigDecimal.ZERO : o.getPointsDiscount());
+        m.put("pointsEarned", o.getPointsEarned() == null ? 0 : o.getPointsEarned());
         m.put("saved", o.getSavedAmount());
         m.put("buyerName", o.getBuyerName());
         m.put("buyerPhone", o.getBuyerPhone());

@@ -38,6 +38,16 @@ public class TicketOrder {
     /** 待使用 / 已取消 / 已使用 */
     private String status;
     private String remark;
+    /** 会员 id（下单手机号对应的会员档案） */
+    private Long memberId;
+    /** 积分抵扣前金额 */
+    private BigDecimal grossAmount;
+    /** 使用的积分 */
+    private Integer pointsUsed;
+    /** 积分抵扣金额 */
+    private BigDecimal pointsDiscount;
+    /** 本单获得的积分 */
+    private Integer pointsEarned;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

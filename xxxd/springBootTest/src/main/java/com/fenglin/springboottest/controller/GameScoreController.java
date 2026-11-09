@@ -23,11 +23,11 @@ import java.util.Map;
 
 /**
  * 森林小游戏成绩接口（boonie_game_score）
- *   GET  /api/games/scores      —— 我的三款游戏最佳成绩
+ *   GET  /api/games/scores      —— 我的四款游戏最佳成绩
  *   POST /api/games/scores      —— 上报一局成绩 { gameId, score }
  *   GET  /api/games/leaderboard —— 各游戏排行榜 Top10
  *
- * 计分规则：honey / mole 分数越大越好；match 为配对步数，越小越好。
+ * 计分规则：run / honey / mole 分数越大越好；match 为配对步数，越小越好。
  */
 @RestController
 @RequestMapping("/api")
@@ -38,6 +38,7 @@ public class GameScoreController {
     private static final Map<String, String> GAME_NAMES = new LinkedHashMap<>();
 
     static {
+        GAME_NAMES.put("run", "森林跑酷");
         GAME_NAMES.put("honey", "接蜂蜜");
         GAME_NAMES.put("mole", "打松鼠");
         GAME_NAMES.put("match", "森林翻牌");

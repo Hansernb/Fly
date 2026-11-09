@@ -31,6 +31,16 @@
     :token="session?.token || ''"
     :initial-ticket-id="presetTicketId"
     @back="goHome"
+    @member="enterMember"
+  />
+
+  <!-- 森林会员中心页（独立路由） -->
+  <MemberCenter
+    v-else-if="view === 'member'"
+    :user="session?.user || null"
+    :token="session?.token || ''"
+    @back="goHome"
+    @tickets="enterTickets"
   />
 
   <!-- 森林小游戏中心页（独立路由） -->
@@ -51,6 +61,7 @@
     @attractions="enterAttractions"
     @tickets="enterTickets"
     @games="enterGames"
+    @member="enterMember"
   />
 
   <!-- 未登录：森林登录 / 注册页 -->
@@ -71,6 +82,7 @@ import AttractionList from './components/AttractionList.vue'
 import ParkMap from './components/ParkMap.vue'
 import TicketBooking from './components/TicketBooking.vue'
 import ForestGames from './components/ForestGames.vue'
+import MemberCenter from './components/MemberCenter.vue'
 
 const session = ref(null)      // 前台会话 { user, token }
 const adminSession = ref(null) // 后台会话 { user, token }
@@ -121,9 +133,10 @@ const ROUTES = [
   { path: '/attractions', view: 'attractions' },
   { path: '/map', view: 'map' },
   { path: '/tickets', view: 'tickets' },
-  { path: '/games', view: 'games' }
+  { path: '/games', view: 'games' },
+  { path: '/member', view: 'member' }
 ]
-const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map', tickets: '/tickets', games: '/games' }
+const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map', tickets: '/tickets', games: '/games', member: '/member' }
 
 function go(path, viewName) {
   if (location.pathname !== path) {
@@ -237,6 +250,11 @@ function enterTickets(ticketId) {
 /** 首页「森林小游戏」入口 → 进入小游戏中心页 */
 function enterGames() {
   go('/games', 'games')
+}
+
+/** 会员中心：结算成功页「我的会员卡」/ 首页导航「会员中心」 */
+function enterMember() {
+  go('/member', 'member')
 }
 
 /** 退出后台，回到首页（保留前台会话） */

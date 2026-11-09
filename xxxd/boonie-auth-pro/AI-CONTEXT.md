@@ -48,6 +48,9 @@ npx vite
 - `src/components/AdminPanel.vue` — 后台管理系统：三个 Tab = 游乐项目管理（增删改查）/ 游客评价管理（查看、删除）/ 用户与权限（切换 0|1、重置密码）；请求均带 `Authorization: Bearer <token>`
 - `src/components/ParkHome.vue` — **已改为从后端 API 取数**：`onMounted` 调 `GET /api/attractions`（带本地 attractions.js 兜底）；游乐项目卡片可点击打开「项目详情」弹窗（含该项目评价 + 发表评价，POST /api/reviews）；底部游客评价表单同样写库。后端不可达时自动降级为示例数据并显示提示条。
 - `server/index.js` — 旧 Express 后端（已弃用，勿启动，会和 Java 后端抢 8080）
+- `src/components/MemberCenter.vue` — 会员中心页（路由 `/member`）：手机号查会员、会员卡（等级配色 lv-normal/silver/gold、头像 emoji、昵称编辑、升级进度条）、积分规则卡、积分明细列表；后端 404/断网时降级本地（localStorage `boonie_member_v1`）
+- `src/data/member.js` — 积分规则纯函数（POINT_RULES/LEVELS、levelOf/maxDeductPoints/discountOf/earnedOf/decorate）+ 本地兜底（loadLocalMember/localAddPoints）、`MEMBER_PHONE_KEY='boonie_member_phone'` 记住上次手机号
+- `src/components/ForestGames.vue` — 小游戏中心（4 款：接蜂蜜/打地鼠/配对/森林跑酷 run）；成绩走 `/api/games/scores`，未登录降级 localStorage
 - `data/users.json` — 旧 Express 的用户数据（已弃用，真正数据在 MySQL boonie_auth.boonie_user）
 - `vite.config.js` — 端口 5173、自动开浏览器、代理 `/api` → **动态解析的后端端口**（读后端激活 profile 的 `server.port`，默认 8080）
 - `start.bat` / `stop.bat` — 启动/停止脚本
@@ -58,3 +61,11 @@ npx vite
 - 用户要求：脚本用 GBK 编码、路径用相对路径、脚本不能依赖 node_modules/target 已存在
 - 沙箱执行启动命令时环境变量 SERVER_PORT 会被劫持导致端口错乱，务必显式指定 8080（详见后端 AI-CONTEXT 的踩坑记录）
 - 如果 start.bat 报 npm 不存在 → 电脑重置把 Node 也删了，需先装 Node 22+
+
+## 会员积分体系（前端侧，2026-11 新增）
+- 路由：本项目用 App.vue 自建 History 路由（view 状态 + ROUTES 映射，非 vue-router），`/member` → MemberCenter.vue；ParkHome 导航和抽屉、TicketBooking 成功页均有「💎 会员中心/我的会员卡」入口（emit 'member'）
+- **下单即会员**：TicketBooking 步骤 4 填手机号后（防抖）查 `GET /api/member/preview?phone=&amount=` 显示积分抵扣面板（滑杆/快捷档/实时折后价）；提交时后端 `POST /api/orders` 自动开通会员并计积分，返回 `isNewMember/pointsEarned`，成功页显示会员卡弹卡
+- **重要**：submit 已移除「未登录拦截」——游客手机号可直接 POST 后端下单（后端支持游客订单），后端不可达才降级 localStorage（createLocalOrder 里做本地积分记账）
+- 积分规则纯函数在 `src/data/member.js`，与后端 MemberService 常量保持一致（1 元=1 分、1 分=0.3 元、单笔最多抵 50%、500 白银/2000 黄金）；改规则要前后端同步
+- ⚠️ reveal 渐显陷阱：`.reveal { opacity: 0 }` 依赖 ParkHome 的 IntersectionObserver 加 `.is-visible`，独立路由组件（如 TicketBooking）必须在 onMounted 里自己补，否则卡片永久透明
+- `vite.config.js` 已加 `server.host: true`（默认只绑 IPv6 `[::1]`，导致 start.bat 启动后 IPv4 无法访问）
