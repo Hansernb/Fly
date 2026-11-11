@@ -92,6 +92,24 @@ CREATE TABLE IF NOT EXISTS `boonie_attraction` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
+-- ---------------------------- 迁移：游乐项目补风景图 img ----------------------------
+SET @has_attr_img := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_attraction' AND COLUMN_NAME = 'img'
+);
+SET @sql_img := IF(@has_attr_img = 0,
+  'ALTER TABLE `boonie_attraction` ADD COLUMN `img` varchar(128) DEFAULT NULL COMMENT ''项目风景图路径（前端 /img/… 静态资源）'' AFTER `emoji`',
+  'SELECT 1');
+PREPARE _st_img FROM @sql_img; EXECUTE _st_img; DEALLOCATE PREPARE _st_img;
+
+-- 老数据按项目名回填风景图（幂等：已有图的不动；新项目缺图由接口层按 id 兜底）
+UPDATE `boonie_attraction` SET `img` = '/img/coaster.gif'   WHERE (`img` IS NULL OR `img` = '') AND `name` = '树洞过山车';
+UPDATE `boonie_attraction` SET `img` = '/img/ferris.jpeg'   WHERE (`img` IS NULL OR `img` = '') AND `name` = '星空摩天轮';
+UPDATE `boonie_attraction` SET `img` = '/img/train.jpeg'    WHERE (`img` IS NULL OR `img` = '') AND `name` = '森林小火车';
+UPDATE `boonie_attraction` SET `img` = '/img/rafting.jpeg'  WHERE (`img` IS NULL OR `img` = '') AND `name` = '蜂蜜漂流';
+UPDATE `boonie_attraction` SET `img` = '/img/maze.jpeg'     WHERE (`img` IS NULL OR `img` = '') AND `name` = '光头强迷宫';
+UPDATE `boonie_attraction` SET `img` = '/img/waterfall.jpg' WHERE (`img` IS NULL OR `img` = '') AND `name` = '激流勇士';
+
 -- ---------------------------- 游客评价表 ----------------------------
 CREATE TABLE IF NOT EXISTS `boonie_review` (
   `id` bigint NOT NULL AUTO_INCREMENT,
@@ -268,7 +286,8 @@ CREATE TABLE IF NOT EXISTS `boonie_ticket_order` (
 -- ---------------------------- 会员表（下单手机号自动建档） ----------------------------
 CREATE TABLE IF NOT EXISTS `boonie_member` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `phone` varchar(20) NOT NULL COMMENT '手机号（会员唯一标识）',
+  `user_id` bigint DEFAULT NULL COMMENT '绑定账号 boonie_user.id（账号买票积分归该账号）',
+  `phone` varchar(20) DEFAULT NULL COMMENT '手机号（游客会员标识；账号会员取最近下单手机号）',
   `nickname` varchar(64) DEFAULT NULL COMMENT '昵称',
   `avatar` varchar(16) DEFAULT '🐻' COMMENT '头像 emoji',
   `total_points` int NOT NULL DEFAULT 0 COMMENT '当前可用积分',
@@ -277,8 +296,19 @@ CREATE TABLE IF NOT EXISTS `boonie_member` (
   `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE INDEX `uk_member_phone`(`phone`)
+  UNIQUE INDEX `uk_member_phone`(`phone`),
+  UNIQUE INDEX `uk_member_user`(`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 迁移：会员绑定登录账号 ----------------------------
+SET @has_member_user := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_member' AND COLUMN_NAME = 'user_id'
+);
+SET @sql_member_user := IF(@has_member_user = 0,
+  'ALTER TABLE `boonie_member` ADD COLUMN `user_id` bigint DEFAULT NULL COMMENT ''绑定账号 boonie_user.id（账号买票积分归该账号）'' AFTER `id`, ADD UNIQUE INDEX `uk_member_user`(`user_id`), MODIFY COLUMN `phone` varchar(20) NULL COMMENT ''手机号（游客会员标识）''',
+  'SELECT 1');
+PREPARE _st_mu FROM @sql_member_user; EXECUTE _st_mu; DEALLOCATE PREPARE _st_mu;
 
 -- ---------------------------- 积分明细表 ----------------------------
 CREATE TABLE IF NOT EXISTS `boonie_point_log` (
@@ -298,7 +328,7 @@ CREATE TABLE IF NOT EXISTS `boonie_point_log` (
 -- ---------------------------- 小游戏成绩表 ----------------------------
 CREATE TABLE IF NOT EXISTS `boonie_game_score` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL COMMENT '用户 id',
+  `user_id` bigint DEFAULT NULL COMMENT '用户 id（后台手工补录的成绩为 NULL）',
   `user_name` varchar(64) DEFAULT NULL COMMENT '用户名快照',
   `game_id` varchar(32) NOT NULL COMMENT '游戏编码：honey/mole/match',
   `game_name` varchar(64) DEFAULT NULL COMMENT '游戏名称',
@@ -309,6 +339,16 @@ CREATE TABLE IF NOT EXISTS `boonie_game_score` (
   PRIMARY KEY (`id`),
   UNIQUE INDEX `uk_user_game`(`user_id`, `game_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 迁移：游戏成绩表允许后台补录（user_id 可空） ----------------------------
+SET @has_game_uid_nn := (
+  SELECT IS_NULLABLE FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_game_score' AND COLUMN_NAME = 'user_id'
+);
+SET @sql_game_uid := IF(@has_game_uid_nn = 'NO',
+  'ALTER TABLE `boonie_game_score` MODIFY COLUMN `user_id` bigint DEFAULT NULL COMMENT ''用户 id（后台手工补录的成绩为 NULL）''',
+  'SELECT 1');
+PREPARE _st_gu FROM @sql_game_uid; EXECUTE _st_gu; DEALLOCATE PREPARE _st_gu;
 
 -- ---------------------------- 种子：5 种门票（含儿童/老人优惠，幂等 upsert） ----------------------------
 INSERT INTO `boonie_ticket`

@@ -67,7 +67,7 @@
 - `PUT /api/admin/users/{id}` — body `{ permission: 0|1 }` 改权限；`{ password }` 重置明文密码（不能取消自己的管理员）
 
 ## 文件地图
-- `src/main/java/com/fenglin/springboottest/` — 主类 / AuthController / UserController / AttractionController / TicketOrderController / MemberController / GameScoreController / service(MemberService) / mapper(MemberMapper/PointLogMapper) / entity(User→boonie_user、Attraction→boonie_attraction、Review→boonie_review、Member→boonie_member、PointLog→boonie_point_log、TicketOrder→boonie_ticket_order) / common(SchemaInitializer 自动建表补列) / config(AppConfig 全局 CORS)
+- `src/main/java/com/fenglin/springboottest/` — 主类 / AuthController / UserController / AttractionController / TicketOrderController / MemberController / GameScoreController / service(AuthService、AttractionService、MemberService + impl 子包) / mapper(MemberMapper、PointLogMapper 等) / entity(User→boonie_user、Attraction→boonie_attraction、Review→boonie_review、Member→boonie_member、PointLog→boonie_point_log、TicketOrder→boonie_ticket_order) / common(DataInitializer、GlobalExceptionHandler、BizException、AvatarStorage) / config(AppConfig 全局 CORS)。**没有 SchemaInitializer，建表只靠 db-init.sql**
 - `src/main/resources/application-dev.properties` — 端口 8080、MySQL 连接（本文件含数据库密码，勿外传）
 - `start.bat` / `stop.bat` / `db-init.sql` — 运维脚本（db-init.sql 已含 boonie_attraction / boonie_review 建表；种子数据由 DataInitializer 在表空时写入）
 - `log/xx.log` — 运行日志（排错先看这里）
@@ -89,15 +89,37 @@
 - 前端对应：`src/data/tickets.js` 的 `TICKETS` 是响应式数组 + `loadTickets()`（接口失败自动降级内置票库）；`TicketBooking.vue` 订单走 `/api/orders`，未登录/断网降级 localStorage；`ForestGames.vue` 成绩走 `/api/games/scores`
 - ⚠️ 改了后端 Java 需重启 8080 进程（`stop.bat` + `start.bat`）新接口才生效
 
+## 评论头像按名字生成 + 项目风景图（2026-11-11）
+- **评论头像**：`POST /api/reviews` 未传/传无效 avatar 时，不再统一回退 🐻，改为按「评价人名字」确定性生成 emoji（`common/NameAvatar`，24 个森林/动物 emoji 池）——同名永远同头像，且避让库里已占用的纯 emoji 头像，做到**异名不同头像**。用户上传头像（/api/avatar/…）与 /img/ 路径不受影响
+- 存量回填：`DataInitializer.normalizeReviewAvatars()` 每次启动幂等执行——只重写「纯 emoji 头像」，路径头像不动（`NameAvatar.assignUnique`，按名字排序稳定分配保证互不相同）
+- **项目风景图**：`boonie_attraction` 新增 `img` 列（db-init.sql 幂等迁移 + 按项目名回填 6 张图）；`GET /api/attractions` 返回 `img` 字段，库里缺图时接口层按项目 id 从 `FALLBACK_IMGS` 兜底，前端 `img: a.img || FALLBACK_IMG` 逻辑不用改
+- 后台新增项目不填 img 也能正常显示（走接口层兜底），想换图直接 UPDATE `boonie_attraction`.img
+
+## 首页搜索改为「只显示搜索结果」（2026-11-11，前端 ParkHome.vue）
+- 搜索框有内容即进入搜索态（`searching = !!query.trim()`，输入即时生效，无需点按钮）
+- 搜索态下隐藏：轮播 banner / hero / 生态条 / 热门项目 / 栖息地(HabitatCards) / 演出(ShowSchedule) / 门票 / 小游戏 / 风景 / 游客评价 / 林缘树线 / 数据卡片 / 园区地图（共 13 处 `v-if="!searching"`）
+- 改为只显示 `#search-results` 区：按类型分组「游乐项目（复用 ride 卡片，可点开详情）/ 栖息地 / 演出 / 门票」，带「共 N 条」计数与空结果提示；点栖息地/演出/门票会先退出搜索再滚到对应板块
+- 菜单点击 `goSection` 会先清空 query，避免滚到隐藏板块；`clearSearch` 清空后回到首页全量视图
+
+## 后台管理扩展：全量 CRUD + 小游戏成绩管理（2026-11-11）
+- `AdminController` 新增四组接口（全部管理员鉴权）：`/api/admin/habitats`、`/api/admin/shows`、`/api/admin/tickets`、`/api/admin/games`，均支持 GET 列表 / POST 新增 / PUT {id} 修改 / DELETE {id} 删除，直接读写对应表
+- 门票表注意事项：`type_code` 需 3–20 位小写字母（订票按编码找票）；`features` 按换行分行存储；删除票种不影响历史订单（订单冗余了 ticket_name）
+- 小游戏成绩（boonie_game_score）：GET 支持 `?gameId=honey&q=玩家名` 过滤、按 bestScore 倒序；PUT 可改 bestScore/plays/gameName（清作弊/改榜单）；POST 手工补录（user_id 为 NULL）——表已迁移 user_id 可空（uk_user_game 唯一索引允许多个 NULL）
+- 前端 AdminPanel.vue：SECTIONS 里演出改为接库（字段 showTime/tag），新增「栖息地管理 / 门票管理 / 小游戏成绩管理」三个模块；表格 UI 是通用的（新增/编辑/删除/上下架/拖拽全复用）；注意「上下架」开关目前仍是前端本地覆盖，未写库
+
 ## 会员积分体系（2026-11 新增，已落库）
-- 表：`boonie_member`（phone/nickname/avatar/total_points/cum_points/level_name，phone 唯一）、`boonie_point_log`（member_id/log_type/points/balance/order_no/remark）；`boonie_ticket_order` 新增 5 列：member_id/gross_amount/points_used/points_discount/points_earned。全部建表由 `SchemaInitializer`（ApplicationRunner + JdbcTemplate，幂等检查 information_schema）启动时自动迁移，db-init.sql 同步更新
-- 规则：**手机号下单即自动开通会员**（无需注册/登录，游客也可下单）；1 元 = 1 积分（FLOOR 取整，按实付金额计）；积分抵扣 1 积分 = 0.3 元，单笔最多抵 50%：`maxDeductible = min(余额, floor(金额×0.5÷0.3))`；实付最低 0.01 元；等级按**累计积分**（不因退款回退）：≥2000 黄金 / ≥500 白银 / 其余普通
-- 常量集中在 `service/MemberService.java`（YUAN_PER_POINT=0.3、MAX_DEDUCT_RATIO=0.5、SILVER_AT=500、GOLD_AT=2000）
-- 接口：
-  - `GET /api/member?phone=` — 会员信息 + 积分明细 logs（不存在返回 404，前端降级本地）
-  - `GET /api/member/preview?phone=&amount=` — 抵扣预览 `{ isMember, maxPoints, maxDiscount }`
-  - `POST /api/member/profile` — 改昵称/头像 `{ phone, nickname, avatar }`
-- 下单流程（TicketOrderController）：isNewMember → getOrCreate → maxUse=maxDeductible → usePoints=min(前端传入, maxUse) → paid=gross−discount → earned=floor(paid) → 先插订单后 `memberService.record` 写两条流水（抵扣 −usePoints / 获取 +earned）；返回多带 `member / pointsEarned / isNewMember / message`（前端弹「已自动开通会员，获得 XX 积分」）
-- 取消订单：`cancel` 调 `memberService.rollback`（抵扣积分全额退还，赚取积分扣回；cum_points 不回退）
+- **会员身份 = 登录账号**（2026-11-11 改）：`boonie_member.user_id` 绑定 `boonie_user.id`（唯一），哪个账号买票积分就加到该账号的卡上，**与取票人手机号无关**；`phone` 改为可空，仅作展示与游客兜底（账号会员记录最近一次下单手机号）
+- 表：`boonie_member`（user_id/phone/nickname/avatar/total_points/cum_points/level_name，user_id 唯一、phone 唯一且可空）、`boonie_point_log`（member_id/log_type/points/balance/order_no/remark）；`boonie_ticket_order` 含 5 列：member_id/gross_amount/points_used/points_discount/points_earned。建表全靠 `start.bat` 每次启动幂等执行 `db-init.sql`（**项目里没有 SchemaInitializer**，别假设有启动自动迁移）
+- 规则：**登录账号下单即自动开通会员**——`getOrCreateForUser(userId, phone, name)`：先按 user_id 找 → 再尝试把同手机号的游客档案归并到该账号 → 都没有才新建；未登录游客仍按手机号建档（`getOrCreate`），但**若该手机号已绑定账号则拒绝下单**（400「该手机号已绑定会员账号，请先登录再下单」，防止冒用别人手机号花积分）。1 元 = 1 积分（FLOOR 取整，按实付金额计）；积分抵扣 1 积分 = 0.3 元，单笔最多抵 50%：`maxDeductible = min(余额, floor(金额×0.5÷0.3))`；实付最低 0.01 元；等级按**累计积分 cum_points**：≥2000 黄金 / ≥500 白银 / 其余普通
+- 累计积分口径（2026-11-11 修正）：只有「获取」增加累计，「抵扣/退款」不动累计，「扣回」时累计一并扣回 → 取消订单后等级会回落，避免「下单再取消」刷等级
+- 代码结构：`service/MemberService.java` 是接口，实现在 `service/impl/MemberServiceImpl.java`（YUAN_PER_POINT=0.3、MAX_RATIO=0.5、SILVER_AT=500、GOLD_AT=2000）
+- 接口（三个都支持 `Authorization: Bearer`；**带令牌一律按账号查，忽略 phone**）：
+  - `GET /api/member?phone=` — 会员信息 + 积分明细 `{ member, logs }`（不存在返回 404，前端降级本地；登录态返回 `userId`）
+  - `GET /api/member/preview?phone=&amount=` — 抵扣预览 `{ member, maxPoints, maxDiscount }`（member 为 null = 未开通；前端读 `data.member`；登录态手机号可空）
+  - `POST /api/member/profile` — 改昵称/头像 `{ phone, nickname, avatar }`（登录态按账号会员改）
+- 前端渲染（ParkHome.vue）：评价头像 `avatarIsImg/emoji`——有图片路径或命中 AVATAR_IMG 映射就用 `<img>`，否则**直接渲染 emoji**（旧逻辑未命中的 emoji 全部落到同一张默认图，是「头像都一样」的根因，已修）
+- 下单流程（TicketOrderController）：登录态 isNewMember=findByUser 为空 → getOrCreateForUser；游客态按手机号 → maxUse=maxDeductible → usePoints=min(前端传入, maxUse) → paid=gross−discount → earned=floor(paid) → 先插订单后 `memberService.record` 写两条流水（抵扣 −usePoints / 获取 +earned）；返回多带 `member / pointsEarned / isNewMember / message`（前端弹「已自动开通会员，获得 XX 积分」）
+- 取消订单：`cancel` 调 `memberService.rollback`（抵扣积分全额退还只回余额；赚取积分扣回，余额与 cum_points 一起回退）
+- ⚠️ **会员模块文件曾整体丢失**（2026-11-11 编译报 `找不到符号 Member / MemberService`）：若再次出现，检查 `entity/Member`、`entity/PointLog`、`mapper/MemberMapper`、`mapper/PointLogMapper`、`service/(impl/)MemberService*`、`controller/MemberController` 是否缺失，别去改 TicketOrderController
 - 游戏成绩 `GAME_NAMES` 白名单已含 `run`（森林跑酷）
 - **CORS（重要）**：浏览器对同源 POST fetch 也会带 Origin 头，旧的 `@CrossOrigin(origins="http://localhost:5173")` 在前端换端口（如 5174）时报 403 "Invalid CORS request"（curl 测不出，因为 curl 不带 Origin）。已改为 `config/AppConfig.java` 全局 `allowedOriginPatterns("*")`，勿再回退成写死来源

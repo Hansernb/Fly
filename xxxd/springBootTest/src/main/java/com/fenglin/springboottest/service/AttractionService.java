@@ -13,4 +13,7 @@ public interface AttractionService {
 
     /** 为某项目新增一条评价，返回写入后的评价（含自增 id 与日期） */
     Review addReview(Long attractionId, String name, String avatar, BigDecimal rating, String content);
+
+    /** 按评价人名字生成头像（确定性），并避开库里已被占用的纯 emoji 头像，保证异名不同头像 */
+    String generateAvatar(String reviewerName);
 }

@@ -85,9 +85,21 @@ public class TicketOrderController {
         BigDecimal qtyDec = BigDecimal.valueOf(qty);
         BigDecimal gross = unit.multiply(qtyDec);
 
-        // ===== 会员：手机号自动建档（无需单独注册），同号再次下单自动「登录」 =====
-        boolean isNewMember = memberService.findByPhone(buyerPhone) == null;
-        Member member = memberService.getOrCreate(buyerPhone, buyerName);
+        // ===== 会员：积分跟「登录账号」走；游客（未登录）才按取票人手机号兜底建档 =====
+        Member member;
+        boolean isNewMember;
+        if (me != null) {
+            isNewMember = memberService.findByUser(me.getId()) == null;
+            member = memberService.getOrCreateForUser(me.getId(), buyerPhone, buyerName);
+        } else {
+            Member bound = memberService.findByPhone(buyerPhone);
+            // 该手机号已绑定会员账号：游客不得冒用（防止别人填你的手机号花你的积分）
+            if (bound != null && bound.getUserId() != null) {
+                throw new BizException(400, "该手机号已绑定会员账号，请先登录再下单，积分会记到账号上");
+            }
+            isNewMember = bound == null;
+            member = memberService.getOrCreate(buyerPhone, buyerName);
+        }
 
         // ===== 积分抵扣：1 积分 = 0.3 元，单笔最多抵扣金额的 50% =====
         int maxUse = memberService.maxDeductible(member, gross);
@@ -135,7 +147,7 @@ public class TicketOrderController {
             memberService.record(member, earned, "获取", o.getOrderNo(),
                     "购票实付 ¥" + paid.toPlainString() + " 获得积分");
         }
-        Member latest = memberService.findByPhone(buyerPhone);
+        Member latest = member;   // record() 已把最新余额/累计/等级回写到该对象
 
         Map<String, Object> out = ok(orderMap(o));
         out.put("member", memberService.toMap(latest));

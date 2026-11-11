@@ -613,10 +613,12 @@ function toggleUsePoints() {
   pointsToUse.value = maxPointsUsable.value
 }
 
-/** 手机号 / 金额变化 → 查询会员与可抵扣额度（防抖） */
+/** 手机号 / 金额变化 → 查询会员与可抵扣额度（防抖）
+ *  已登录：会员积分跟账号走，手机号没填也能查；
+ *  未登录：仍按取票人手机号查（游客兜底） */
 function scheduleMemberLookup() {
   clearTimeout(memberTimer)
-  if (!phoneOk.value) {
+  if (!props.token && !phoneOk.value) {
     memberInfo.value = null
     usePointsOn.value = false
     pointsToUse.value = 0
@@ -626,11 +628,12 @@ function scheduleMemberLookup() {
 }
 
 async function fetchMember() {
-  if (!phoneOk.value) return
+  if (!props.token && !phoneOk.value) return
   memberLoading.value = true
   try {
     const res = await fetch(
-      `/api/member/preview?phone=${buyerPhone.value}&amount=${total.value}`
+      `/api/member/preview?phone=${encodeURIComponent(buyerPhone.value)}&amount=${total.value}`,
+      { headers: authHeaders() }
     )
     if (!res.ok) throw new Error('HTTP ' + res.status)
     const json = await res.json()
@@ -919,6 +922,8 @@ onMounted(async () => {
     selectedId.value = props.initialTicketId
     step.value = 2
   }
+  // 已登录：进页就按账号拉会员卡（积分跟账号走，不依赖手机号）
+  if (props.token) fetchMember()
   // 票种以数据库为准（失败自动沿用内置票库）
   await loadTickets()
   if (selectedId.value && !TICKETS.some((t) => t.id === selectedId.value)) {

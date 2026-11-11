@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /** 首次启动且表为空时，初始化种子用户与游乐项目数据 */
 @Component
@@ -47,6 +48,33 @@ public class DataInitializer implements ApplicationRunner {
             seedProjects();
             System.out.println("🗂️ 已初始化后端项目登记表（2 个项目）");
         }
+        normalizeReviewAvatars();
+    }
+
+    /**
+     * 存量评论头像按名字重生成（幂等）：只动「纯 emoji 头像」，
+     * 用户上传/默认图片路径不动。同名同头像、不同名字头像不同。
+     */
+    private void normalizeReviewAvatars() {
+        List<Review> all = reviewMapper.selectList(null);
+        if (all.isEmpty()) return;
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (Review r : all) {
+            if (NameAvatar.isPlainEmoji(r.getAvatar())) names.add(r.getReviewerName());
+        }
+        if (names.isEmpty()) return;
+        Map<String, String> assigned = NameAvatar.assignUnique(names);
+        int changed = 0;
+        for (Review r : all) {
+            if (!NameAvatar.isPlainEmoji(r.getAvatar())) continue;
+            String next = assigned.get(r.getReviewerName() == null ? "" : r.getReviewerName().trim());
+            if (next != null && !next.equals(r.getAvatar())) {
+                r.setAvatar(next);
+                reviewMapper.updateById(r);
+                changed++;
+            }
+        }
+        if (changed > 0) System.out.println("🧑‍🎨 已按名字重生成 " + changed + " 条评论头像（同名同头像、异名不同头像）");
     }
 
     /** 登记本工作区下的后端/前端项目（与 db-init.sql 种子一致，仅作双保险） */
@@ -90,14 +118,14 @@ public class DataInitializer implements ApplicationRunner {
 
     /** 游乐项目 + 评价种子，字段与前端 src/data/attractions.js 保持一致 */
     private void seedAttractions() {
-        // 项目：[emoji, name, description, tag, waitMinutes, color]
+        // 项目：[emoji, img, name, description, tag, waitMinutes, color]
         Object[][] rows = {
-            {"🎢", "树洞过山车", "穿梭在千年古树之间，俯冲、旋转，尖叫声响彻狗熊岭！全程 880 米，最高时速 78km/h，适合追求刺激的勇敢者。", "刺激", 25, "#e4572e"},
-            {"🎡", "星空摩天轮", "升至森林之巅，俯瞰整片狗熊岭的日落与星空。每舱可坐 6 人，缓缓转动 12 分钟一圈，浪漫满分。", "浪漫", 15, "#7c5cbf"},
-            {"🚂", "森林小火车", "呜——哐当哐当，跟着吉吉国王环游五大主题区。全程 1.6 公里，沿途有动物演员挥手互动，亲子首选。", "亲子", 10, "#2f7d4f"},
-            {"🍯", "蜂蜜漂流", "乘上蜂蜜罐小船，顺着金色溪流来一场甜蜜漂流。全长 420 米，中途有喷泉惊喜，清凉解暑。", "清凉", 30, "#ffb703"},
-            {"🏰", "光头强迷宫", "在光头强的小木屋迷宫里寻宝，小心别被发现哦！共 3 层木质迷宫，藏着 12 个惊喜彩蛋。", "益智", 8, "#a9743c"},
-            {"💦", "激流勇士", "从瀑布顶端一跃而下，夏日限定的透心凉体验。落差 18 米，尖叫与水花齐飞，记得带雨衣。", "刺激", 40, "#2a9d8f"}
+            {"🎢", "/img/coaster.gif", "树洞过山车", "穿梭在千年古树之间，俯冲、旋转，尖叫声响彻狗熊岭！全程 880 米，最高时速 78km/h，适合追求刺激的勇敢者。", "刺激", 25, "#e4572e"},
+            {"🎡", "/img/ferris.jpeg", "星空摩天轮", "升至森林之巅，俯瞰整片狗熊岭的日落与星空。每舱可坐 6 人，缓缓转动 12 分钟一圈，浪漫满分。", "浪漫", 15, "#7c5cbf"},
+            {"🚂", "/img/train.jpeg", "森林小火车", "呜——哐当哐当，跟着吉吉国王环游五大主题区。全程 1.6 公里，沿途有动物演员挥手互动，亲子首选。", "亲子", 10, "#2f7d4f"},
+            {"🍯", "/img/rafting.jpeg", "蜂蜜漂流", "乘上蜂蜜罐小船，顺着金色溪流来一场甜蜜漂流。全长 420 米，中途有喷泉惊喜，清凉解暑。", "清凉", 30, "#ffb703"},
+            {"🏰", "/img/maze.jpeg", "光头强迷宫", "在光头强的小木屋迷宫里寻宝，小心别被发现哦！共 3 层木质迷宫，藏着 12 个惊喜彩蛋。", "益智", 8, "#a9743c"},
+            {"💦", "/img/waterfall.jpg", "激流勇士", "从瀑布顶端一跃而下，夏日限定的透心凉体验。落差 18 米，尖叫与水花齐飞，记得带雨衣。", "刺激", 40, "#2a9d8f"}
         };
         // 评价：[项目序号(0-based), reviewerName, avatar, rating, reviewDate, content]
         Object[][] reviews = {
@@ -120,11 +148,12 @@ public class DataInitializer implements ApplicationRunner {
         for (Object[] r : rows) {
             Attraction a = new Attraction();
             a.setEmoji((String) r[0]);
-            a.setName((String) r[1]);
-            a.setDescription((String) r[2]);
-            a.setTag((String) r[3]);
-            a.setWaitMinutes((Integer) r[4]);
-            a.setColor((String) r[5]);
+            a.setImg((String) r[1]);
+            a.setName((String) r[2]);
+            a.setDescription((String) r[3]);
+            a.setTag((String) r[4]);
+            a.setWaitMinutes((Integer) r[5]);
+            a.setColor((String) r[6]);
             a.setCreatedAt(LocalDateTime.now());
             attractionMapper.insert(a);
             ids.add(a.getId());

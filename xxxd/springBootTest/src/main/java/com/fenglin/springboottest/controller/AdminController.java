@@ -4,10 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fenglin.springboottest.common.AvatarStorage;
 import com.fenglin.springboottest.common.BizException;
 import com.fenglin.springboottest.entity.Attraction;
+import com.fenglin.springboottest.entity.GameScore;
+import com.fenglin.springboottest.entity.Habitat;
 import com.fenglin.springboottest.entity.Review;
+import com.fenglin.springboottest.entity.Show;
+import com.fenglin.springboottest.entity.Ticket;
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.mapper.AttractionMapper;
+import com.fenglin.springboottest.mapper.GameScoreMapper;
+import com.fenglin.springboottest.mapper.HabitatMapper;
 import com.fenglin.springboottest.mapper.ReviewMapper;
+import com.fenglin.springboottest.mapper.ShowMapper;
+import com.fenglin.springboottest.mapper.TicketMapper;
 import com.fenglin.springboottest.mapper.UserMapper;
 import com.fenglin.springboottest.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +47,14 @@ public class AdminController {
     private UserMapper userMapper;
     @Autowired
     private AvatarStorage avatarStorage;
+    @Autowired
+    private HabitatMapper habitatMapper;
+    @Autowired
+    private ShowMapper showMapper;
+    @Autowired
+    private TicketMapper ticketMapper;
+    @Autowired
+    private GameScoreMapper gameScoreMapper;
 
     /** 统一鉴权：必须是管理员 */
     private User requireAdmin(String authHeader) {
@@ -273,6 +289,341 @@ public class AdminController {
         m.put("permission", u.getPermission());
         m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
         return ok(m);
+    }
+
+    // ==================== 栖息地管理 ====================
+
+    private Map<String, Object> habitatMap(Habitat h) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", h.getId());
+        m.put("emoji", h.getEmoji());
+        m.put("img", h.getImg());
+        m.put("name", h.getName());
+        m.put("description", h.getDescription());
+        m.put("residents", h.getResidents());
+        m.put("mood", h.getMood());
+        m.put("color", h.getColor());
+        m.put("rating", h.getRating());
+        return m;
+    }
+
+    /** GET /api/admin/habitats */
+    @GetMapping("/habitats")
+    public Map<String, Object> listHabitats(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Habitat h : habitatMapper.selectList(null)) list.add(habitatMap(h));
+        return ok(list);
+    }
+
+    /** POST /api/admin/habitats */
+    @PostMapping("/habitats")
+    public Map<String, Object> createHabitat(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String name = str(body.get("name"));
+        if (name == null || name.isBlank()) throw new BizException(400, "栖息地名称不能为空");
+        Habitat h = new Habitat();
+        h.setName(name);
+        h.setEmoji(def(body.get("emoji"), "🌲"));
+        h.setImg(str(body.get("img")));
+        h.setDescription(def(body.get("description"), ""));
+        h.setResidents(def(body.get("residents"), ""));
+        h.setMood(def(body.get("mood"), ""));
+        h.setColor(def(body.get("color"), "#2f7d4f"));
+        h.setCreatedAt(LocalDateTime.now());
+        habitatMapper.insert(h);
+        return ok(habitatMap(h));
+    }
+
+    /** PUT /api/admin/habitats/{id} */
+    @PutMapping("/habitats/{id}")
+    public Map<String, Object> updateHabitat(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Habitat h = habitatMapper.selectById(id);
+        if (h == null) throw new BizException(404, "栖息地不存在");
+        if (body.containsKey("name")) h.setName(str(body.get("name")));
+        if (body.containsKey("emoji")) h.setEmoji(str(body.get("emoji")));
+        if (body.containsKey("img")) h.setImg(str(body.get("img")));
+        if (body.containsKey("description")) h.setDescription(str(body.get("description")));
+        if (body.containsKey("residents")) h.setResidents(str(body.get("residents")));
+        if (body.containsKey("mood")) h.setMood(str(body.get("mood")));
+        if (body.containsKey("color")) h.setColor(str(body.get("color")));
+        habitatMapper.updateById(h);
+        return ok(habitatMap(h));
+    }
+
+    /** DELETE /api/admin/habitats/{id} */
+    @DeleteMapping("/habitats/{id}")
+    public Map<String, Object> deleteHabitat(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        if (habitatMapper.selectById(id) == null) throw new BizException(404, "栖息地不存在");
+        habitatMapper.deleteById(id);
+        return ok(id);
+    }
+
+    // ==================== 演出管理 ====================
+
+    private Map<String, Object> showMap(Show s) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", s.getId());
+        m.put("showTime", s.getShowTime());
+        m.put("emoji", s.getEmoji());
+        m.put("name", s.getName());
+        m.put("place", s.getPlace());
+        m.put("tag", s.getTag());
+        return m;
+    }
+
+    /** GET /api/admin/shows */
+    @GetMapping("/shows")
+    public Map<String, Object> listShows(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Show s : showMapper.selectList(null)) list.add(showMap(s));
+        return ok(list);
+    }
+
+    /** POST /api/admin/shows */
+    @PostMapping("/shows")
+    public Map<String, Object> createShow(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String name = str(body.get("name"));
+        if (name == null || name.isBlank()) throw new BizException(400, "演出名称不能为空");
+        Show s = new Show();
+        s.setName(name);
+        s.setShowTime(def(body.get("showTime"), "10:00"));
+        s.setEmoji(def(body.get("emoji"), "🎪"));
+        s.setPlace(def(body.get("place"), "中心广场"));
+        s.setTag(def(body.get("tag"), "约 20 分钟"));
+        s.setCreatedAt(LocalDateTime.now());
+        showMapper.insert(s);
+        return ok(showMap(s));
+    }
+
+    /** PUT /api/admin/shows/{id} */
+    @PutMapping("/shows/{id}")
+    public Map<String, Object> updateShow(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Show s = showMapper.selectById(id);
+        if (s == null) throw new BizException(404, "演出不存在");
+        if (body.containsKey("showTime")) s.setShowTime(str(body.get("showTime")));
+        if (body.containsKey("emoji")) s.setEmoji(str(body.get("emoji")));
+        if (body.containsKey("name")) s.setName(str(body.get("name")));
+        if (body.containsKey("place")) s.setPlace(str(body.get("place")));
+        if (body.containsKey("tag")) s.setTag(str(body.get("tag")));
+        showMapper.updateById(s);
+        return ok(showMap(s));
+    }
+
+    /** DELETE /api/admin/shows/{id} */
+    @DeleteMapping("/shows/{id}")
+    public Map<String, Object> deleteShow(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        if (showMapper.selectById(id) == null) throw new BizException(404, "演出不存在");
+        showMapper.deleteById(id);
+        return ok(id);
+    }
+
+    // ==================== 门票管理 ====================
+
+    private Map<String, Object> ticketMap(Ticket t) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", t.getId());
+        m.put("typeCode", t.getTypeCode());
+        m.put("emoji", t.getEmoji());
+        m.put("name", t.getName());
+        m.put("price", t.getPrice());
+        m.put("originalPrice", t.getOriginalPrice());
+        m.put("discountLabel", t.getDiscountLabel());
+        m.put("tagLabel", t.getTagLabel());
+        m.put("descText", t.getDescText());
+        m.put("color", t.getColor());
+        m.put("features", t.getFeatures());
+        m.put("enabled", t.getEnabled());
+        m.put("sortNo", t.getSortNo());
+        return m;
+    }
+
+    /** GET /api/admin/tickets */
+    @GetMapping("/tickets")
+    public Map<String, Object> listTickets(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Ticket t : ticketMapper.selectList(null)) list.add(ticketMap(t));
+        return ok(list);
+    }
+
+    /** POST /api/admin/tickets */
+    @PostMapping("/tickets")
+    public Map<String, Object> createTicket(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String name = str(body.get("name"));
+        if (name == null || name.isBlank()) throw new BizException(400, "票种名称不能为空");
+        String typeCode = str(body.get("typeCode"));
+        if (typeCode == null || !typeCode.matches("[a-z]{3,20}"))
+            throw new BizException(400, "票种编码需为 3–20 位小写字母（如 adult / student）");
+
+        Ticket t = new Ticket();
+        t.setName(name);
+        t.setTypeCode(typeCode);
+        t.setEmoji(def(body.get("emoji"), "🎫"));
+        t.setOriginalPrice(new java.math.BigDecimal(intVal(body.get("originalPrice"), 0)));
+        t.setPrice(new java.math.BigDecimal(intVal(body.get("price"), 0)));
+        t.setDiscountLabel(def(body.get("discountLabel"), ""));
+        t.setTagLabel(def(body.get("tagLabel"), "标准"));
+        t.setDescText(def(body.get("descText"), ""));
+        t.setColor(def(body.get("color"), "#2f7d4f"));
+        t.setFeatures(str(body.get("features")));
+        t.setHot(false);
+        t.setEnabled(true);
+        t.setSortNo(99);
+        t.setCreatedAt(LocalDateTime.now());
+        ticketMapper.insert(t);
+        return ok(ticketMap(t));
+    }
+
+    /** PUT /api/admin/tickets/{id} */
+    @PutMapping("/tickets/{id}")
+    public Map<String, Object> updateTicket(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Ticket t = ticketMapper.selectById(id);
+        if (t == null) throw new BizException(404, "票种不存在");
+        if (body.containsKey("typeCode")) t.setTypeCode(str(body.get("typeCode")));
+        if (body.containsKey("emoji")) t.setEmoji(str(body.get("emoji")));
+        if (body.containsKey("name")) t.setName(str(body.get("name")));
+        if (body.containsKey("price")) t.setPrice(new java.math.BigDecimal(intVal(body.get("price"), 0)));
+        if (body.containsKey("originalPrice")) t.setOriginalPrice(new java.math.BigDecimal(intVal(body.get("originalPrice"), 0)));
+        if (body.containsKey("discountLabel")) t.setDiscountLabel(str(body.get("discountLabel")));
+        if (body.containsKey("tagLabel")) t.setTagLabel(str(body.get("tagLabel")));
+        if (body.containsKey("descText")) t.setDescText(str(body.get("descText")));
+        if (body.containsKey("color")) t.setColor(str(body.get("color")));
+        if (body.containsKey("features")) t.setFeatures(str(body.get("features")));
+        ticketMapper.updateById(t);
+        return ok(ticketMap(t));
+    }
+
+    /** DELETE /api/admin/tickets/{id} */
+    @DeleteMapping("/tickets/{id}")
+    public Map<String, Object> deleteTicket(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        if (ticketMapper.selectById(id) == null) throw new BizException(404, "票种不存在");
+        ticketMapper.deleteById(id);
+        return ok(id);
+    }
+
+    // ==================== 小游戏成绩管理 ====================
+
+    private Map<String, Object> gameMap(GameScore g) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", g.getId());
+        m.put("userId", g.getUserId());
+        m.put("userName", g.getUserName());
+        m.put("gameId", g.getGameId());
+        m.put("gameName", g.getGameName());
+        m.put("bestScore", g.getBestScore());
+        m.put("plays", g.getPlays());
+        m.put("updatedAt", g.getUpdatedAt() != null ? g.getUpdatedAt().toString() : "");
+        return m;
+    }
+
+    /** GET /api/admin/games?gameId=honey&q=张 —— 成绩查询（可按游戏/玩家名过滤） */
+    @GetMapping("/games")
+    public Map<String, Object> listGames(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestParam(value = "gameId", required = false) String gameId,
+            @RequestParam(value = "q", required = false) String q) {
+        requireAdmin(auth);
+        LambdaQueryWrapper<GameScore> qw = new LambdaQueryWrapper<>();
+        if (gameId != null && !gameId.isBlank()) qw.eq(GameScore::getGameId, gameId.trim());
+        if (q != null && !q.isBlank()) qw.like(GameScore::getUserName, q.trim());
+        qw.orderByDesc(GameScore::getBestScore);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (GameScore g : gameScoreMapper.selectList(qw)) list.add(gameMap(g));
+        return ok(list);
+    }
+
+    /** POST /api/admin/games —— 手工补录一条成绩（如线下活动录入） */
+    @PostMapping("/games")
+    public Map<String, Object> createGame(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String gameId = str(body.get("gameId"));
+        if (gameId == null || !gameId.matches("honey|mole|match"))
+            throw new BizException(400, "游戏编码只能是 honey / mole / match");
+        String userName = str(body.get("userName"));
+        if (userName == null || userName.isBlank()) throw new BizException(400, "玩家名不能为空");
+
+        GameScore g = new GameScore();
+        g.setGameId(gameId);
+        g.setGameName(def(body.get("gameName"), gameId));
+        g.setUserName(userName);
+        g.setBestScore(intVal(body.get("bestScore"), 0));
+        g.setPlays(intVal(body.get("plays"), 0));
+        g.setCreatedAt(LocalDateTime.now());
+        g.setUpdatedAt(LocalDateTime.now());
+        gameScoreMapper.insert(g);
+        return ok(gameMap(g));
+    }
+
+    /** PUT /api/admin/games/{id} —— 修改成绩（bestScore / plays / gameName） */
+    @PutMapping("/games/{id}")
+    public Map<String, Object> updateGame(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        GameScore g = gameScoreMapper.selectById(id);
+        if (g == null) throw new BizException(404, "成绩记录不存在");
+        if (body.containsKey("bestScore")) {
+            int v = intVal(body.get("bestScore"), 0);
+            if (v < 0) throw new BizException(400, "最佳成绩不能为负数");
+            g.setBestScore(v);
+        }
+        if (body.containsKey("plays")) {
+            int v = intVal(body.get("plays"), 0);
+            if (v < 0) throw new BizException(400, "游玩局数不能为负数");
+            g.setPlays(v);
+        }
+        if (body.containsKey("gameName")) g.setGameName(str(body.get("gameName")));
+        g.setUpdatedAt(LocalDateTime.now());
+        gameScoreMapper.updateById(g);
+        return ok(gameMap(g));
+    }
+
+    /** DELETE /api/admin/games/{id} —— 删除成绩记录（清作弊/重置榜单用） */
+    @DeleteMapping("/games/{id}")
+    public Map<String, Object> deleteGame(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        if (gameScoreMapper.selectById(id) == null) throw new BizException(404, "成绩记录不存在");
+        gameScoreMapper.deleteById(id);
+        return ok(id);
     }
 
     // ==================== 小工具 ====================

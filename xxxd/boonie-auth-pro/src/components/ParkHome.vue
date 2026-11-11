@@ -186,6 +186,7 @@
 
     <!-- 热门项目轮播 Banner：自动切换 + 左右手动 + 底部指示器 -->
     <section
+      v-if="!searching"
       class="banner reveal"
       aria-roledescription="carousel"
       @mouseenter="stopBanner"
@@ -232,7 +233,7 @@
     </section>
 
     <!-- 主视觉横幅 -->
-    <section class="hero">
+    <section v-if="!searching" class="hero">
       <span class="hero-blob b1" aria-hidden="true"></span>
       <span class="hero-blob b2" aria-hidden="true"></span>
       <span class="hero-sun" aria-hidden="true">☀️</span>
@@ -256,7 +257,7 @@
     </section>
 
     <!-- 森林生态实时条 -->
-    <section class="eco-bar reveal">
+    <section v-if="!searching" class="eco-bar reveal">
       <div v-for="e in ecoStats" :key="e.label" class="eco-item">
         <span class="eco-emoji">{{ e.emoji }}</span>
         <div>
@@ -278,8 +279,101 @@
       <button class="result-clear" type="button" @click="clearSearch">清除筛选</button>
     </div>
 
+    <!-- 搜索结果：搜索框有内容时，下方只显示匹配到的内容，其余板块全部隐藏 -->
+    <section v-if="searching" id="search-results" class="section sr">
+      <div class="section-head">
+        <h2 class="section-title">🔍 “{{ query }}” 的搜索结果</h2>
+        <span class="sr-count">共 {{ totalResults }} 条</span>
+      </div>
+
+      <div v-if="!totalResults" class="empty">
+        🍃 没有找到“{{ query }}”相关内容，换个关键词试试？比如「过山车」「摩天轮」「夜场票」
+      </div>
+
+      <template v-else>
+        <!-- 游乐项目 -->
+        <div v-if="filteredAttractions.length" class="sr-group">
+          <h3 class="sr-group-title">🎡 游乐项目 · {{ filteredAttractions.length }}</h3>
+          <div class="grid">
+            <article
+              v-for="a in filteredAttractions"
+              :key="a.id"
+              class="ride"
+              :style="{ '--accent': a.color }"
+              role="button"
+              tabindex="0"
+              @click="openDetail(a)"
+              @keydown.enter="openDetail(a)"
+            >
+              <div class="ride-cover">
+                <img class="ride-img" :src="a.img || FALLBACK_IMG" :alt="a.name" loading="lazy" />
+                <span class="ride-tag">{{ a.tag }}</span>
+              </div>
+              <div class="ride-body">
+                <h3>{{ a.name }}</h3>
+                <p>{{ a.desc }}</p>
+                <div class="ride-meta">
+                  <span class="wait" :class="'w' + waitLevel(a.wait)">⏱ 排队约 {{ a.wait }} 分钟</span>
+                  <div class="ride-rate">
+                    <StarRating :score="a.rating" :size="15" />
+                    <span class="rate-num">{{ Number(a.rating || 0).toFixed(1) }}</span>
+                  </div>
+                </div>
+                <button class="ride-more" type="button" @click.stop="openDetail(a)">查看详情 ›</button>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <!-- 栖息地 -->
+        <div v-if="filteredHabitats.length" class="sr-group">
+          <h3 class="sr-group-title">🏡 栖息地 · {{ filteredHabitats.length }}</h3>
+          <ul class="sr-list">
+            <li v-for="h in filteredHabitats" :key="h.name" @click="jumpToSection('habitats')">
+              <span class="sr-emoji">{{ h.emoji }}</span>
+              <div class="sr-mid">
+                <b>{{ h.name }}</b>
+                <span>{{ h.desc }}</span>
+              </div>
+              <span class="sr-go">查看 ›</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- 演出 -->
+        <div v-if="filteredShows.length" class="sr-group">
+          <h3 class="sr-group-title">🎭 演出 · {{ filteredShows.length }}</h3>
+          <ul class="sr-list">
+            <li v-for="sh in filteredShows" :key="sh.name" @click="jumpToSection('shows')">
+              <span class="sr-emoji">{{ sh.emoji }}</span>
+              <div class="sr-mid">
+                <b>{{ sh.name }}</b>
+                <span>{{ sh.time }} · {{ sh.place }}</span>
+              </div>
+              <span class="sr-go">{{ sh.tag }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- 门票 -->
+        <div v-if="filteredTickets.length" class="sr-group">
+          <h3 class="sr-group-title">🎫 门票 · {{ filteredTickets.length }}</h3>
+          <ul class="sr-list">
+            <li v-for="t in filteredTickets" :key="t.id" @click="jumpToSection('tickets')">
+              <span class="sr-emoji">{{ t.emoji }}</span>
+              <div class="sr-mid">
+                <b>{{ t.name }}</b>
+                <span>{{ (t.features || []).join(' · ') }}</span>
+              </div>
+              <span class="sr-go">¥{{ t.price }}</span>
+            </li>
+          </ul>
+        </div>
+      </template>
+    </section>
+
     <!-- 游乐项目 -->
-    <section id="attractions" class="section reveal">
+    <section v-if="!searching" id="attractions" class="section reveal">
       <div class="section-head">
         <h2 class="section-title">🎡 热门游乐项目</h2>
         <button class="refresh" type="button" :disabled="loading" @click="fetchAttractions">
@@ -326,13 +420,13 @@
 
     <!-- 森林栖息地 -->
     <!-- 动物栖息地介绍卡片列表 -->
-    <HabitatCards />
+    <HabitatCards v-if="!searching" />
 
     <!-- 演出时间表（上午 / 下午 / 晚上 分场次 + 预约） -->
-    <ShowSchedule />
+    <ShowSchedule v-if="!searching" />
 
     <!-- 门票 -->
-    <section id="tickets" class="section reveal">
+    <section v-if="!searching" id="tickets" class="section reveal">
       <h2 class="section-title">🎫 门票速览</h2>
       <div v-if="filteredTickets.length" class="tickets">
         <div
@@ -369,7 +463,7 @@
     </section>
 
     <!-- 森林小游戏入口 -->
-    <section id="games" class="section reveal">
+    <section v-if="!searching" id="games" class="section reveal">
       <div class="section-head">
         <h2 class="section-title">🎮 森林小游戏</h2>
         <span class="games-count">4 款小游戏 · 随时开局</span>
@@ -436,7 +530,7 @@
     </section>
 
     <!-- 游乐园风景（游客可上传） -->
-    <section id="scenery" class="section reveal">
+    <section v-if="!searching" id="scenery" class="section reveal">
       <div class="scenery-head">
         <h2 class="section-title">📷 游乐园风景</h2>
         <label class="scenery-upload">
@@ -473,7 +567,7 @@
     </transition>
 
     <!-- 游客评价 -->
-    <section id="reviews" class="section reviews reveal">
+    <section v-if="!searching" id="reviews" class="section reviews reveal">
       <h2 class="section-title">🗣️ 游客评价</h2>
 
       <!-- 评分概览 -->
@@ -496,7 +590,8 @@
       <div class="review-list">
         <article v-for="r in allReviews" :key="r.id" class="review">
           <div class="review-avatar">
-            <img :src="avatarSrc(r)" alt="头像" loading="lazy" />
+            <img v-if="avatarIsImg(r)" :src="avatarSrc(r)" alt="头像" loading="lazy" />
+            <span v-else class="review-avatar-emoji">{{ avatarEmoji(r) }}</span>
           </div>
           <div class="review-body">
             <div class="review-head">
@@ -543,7 +638,7 @@
     </section>
 
     <!-- 林缘树线 -->
-    <div class="tree-line" aria-hidden="true">
+    <div v-if="!searching" class="tree-line" aria-hidden="true">
       <span
         v-for="(t, i) in treeLine"
         :key="i"
@@ -553,7 +648,7 @@
     </div>
 
     <!-- 园区实时环境数据卡片 -->
-    <section class="data-cards reveal">
+    <section v-if="!searching" class="data-cards reveal">
       <h2 class="section-title">🌿 园区实时环境数据</h2>
       <div class="data-grid">
         <div v-for="d in liveData" :key="d.label" class="data-card">
@@ -565,7 +660,7 @@
     </section>
 
     <!-- 园区手绘地图（内嵌首页，标记点由项目数据生成） -->
-    <section id="map" class="section reveal">
+    <section v-if="!searching" id="map" class="section reveal">
       <h2 class="section-title">🗺️ 园区手绘地图</h2>
       <ParkMap embedded />
     </section>
@@ -689,11 +784,23 @@ const AVATAR_IMG = {
   '🦔': '/img/hedgehog.jpeg'
 }
 
-// 评价头像：后端已存图片路径则直接用，否则按 emoji 映射，最后兜底默认头像
+// 评价头像：后端已存图片路径则直接用；emoji 有映射图就用图，
+// 没映射图就「直接渲染 emoji 本身」——保证按名字生成的头像各不相同，不再全体落到同一张默认图
 function avatarSrc(r) {
   const a = r && (r.avatarImg || r.avatar)
   if (typeof a === 'string' && a.startsWith('/')) return a
-  return AVATAR_IMG[a] || DEFAULT_AVATAR
+  return AVATAR_IMG[a] || ''
+}
+
+/** 头像是否为图片（有路径或命中 emoji 映射图） */
+function avatarIsImg(r) {
+  return !!avatarSrc(r)
+}
+
+/** 无映射图时渲染的 emoji 头像（后端按名字生成，或兜底 🐻） */
+function avatarEmoji(r) {
+  const a = r && (r.avatarImg || r.avatar)
+  return typeof a === 'string' && a && !a.startsWith('/') ? a : '🐻'
 }
 
 /* ===================== 数据：从数据库（Spring Boot + MySQL）加载 ===================== */
@@ -1131,6 +1238,8 @@ const activeMenu = ref('attractions')
 const menuOpen = ref(false)
 
 function goSection(id) {
+  // 搜索态下点菜单：先退出搜索，否则目标板块处于隐藏状态、滚不到
+  if (query.value) query.value = ''
   activeMenu.value = id
   menuOpen.value = false
   // 「项目大全」跳转到独立页面，其余菜单项（含园区地图）页内平滑滚动
@@ -1263,11 +1372,29 @@ const totalResults = computed(
     filteredTickets.value.length
 )
 
+/** 是否处于搜索态：有输入时整页只保留搜索结果，其余板块全部隐藏 */
+const searching = computed(() => !!query.value.trim())
+
 function runSearch() {
-  if (query.value) activeMenu.value = 'attractions'
+  if (!query.value.trim()) return
+  activeMenu.value = 'attractions'
+  nextTick(() => {
+    const el = document.getElementById('search-results')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
 }
+
 function clearSearch() {
   query.value = ''
+  // 回到初始样子：菜单复位到首页，页面滚回顶部（各板块由 v-if 自动恢复）
+  activeMenu.value = 'home'
+  nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+
+/** 搜索结果里点栖息地/演出/门票：清空搜索，回到首页再滚到对应板块 */
+function jumpToSection(id) {
+  query.value = ''
+  nextTick(() => goSection(id))
 }
 
 // ---- 飘落的绿叶 ----
@@ -3275,6 +3402,93 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   height: 100%;
   object-fit: cover;
   display: block;
+}
+.review-avatar-emoji {
+  line-height: 1;
+  user-select: none;
+}
+
+/* ===== 搜索结果区（搜索态下唯一显示的内容） ===== */
+.sr-count {
+  font-size: 13px;
+  color: #6b7f6b;
+  background: #f2f9ef;
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.sr-group {
+  margin-bottom: 26px;
+}
+.sr-group-title {
+  font-size: 16px;
+  color: #2f5d3a;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sr-group-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, #dbe9d8, transparent);
+}
+.sr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.sr-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e6efe3;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.sr-list li:hover {
+  transform: translateY(-2px);
+  border-color: #cbe3c4;
+  box-shadow: 0 8px 20px rgba(47, 125, 79, 0.1);
+}
+.sr-emoji {
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f2f9ef;
+  border-radius: 12px;
+}
+.sr-mid {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sr-mid b {
+  font-size: 15px;
+  color: #23402c;
+}
+.sr-mid span {
+  font-size: 12.5px;
+  color: #7a8b78;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sr-go {
+  font-size: 12.5px;
+  color: #2f7d4f;
+  white-space: nowrap;
 }
 .review-body {
   flex: 1;

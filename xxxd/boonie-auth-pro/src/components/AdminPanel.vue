@@ -290,19 +290,67 @@ const SECTIONS = [
     key: 'shows',
     name: '演出时刻表',
     icon: '🎪',
-    desc: '维护各剧场的演出时间与地点',
+    desc: '维护各剧场的演出时间与地点（数据库 boonie_show）',
+    api: '/api/admin/shows',
     columns: [
+      { key: 'emoji', label: '图标', type: 'text' },
       { key: 'name', label: '演出名称', type: 'text' },
-      { key: 'time', label: '时间', type: 'text' },
+      { key: 'showTime', label: '时间', type: 'text' },
       { key: 'place', label: '地点', type: 'text' },
-      { key: 'duration', label: '时长(分钟)', type: 'number' }
+      { key: 'tag', label: '时长标签', type: 'text' }
     ],
-    seed: [
-      { name: '熊大熊二迎宾秀', time: '09:30', place: '中心广场', duration: 20 },
-      { name: '森林杂技表演', time: '11:00', place: '松林剧场', duration: 35 },
-      { name: '光头强伐木大赛', time: '14:30', place: '木屋舞台', duration: 25 },
-      { name: '暮光萤火音乐会', time: '19:00', place: '湖畔草地', duration: 45 }
-    ]
+    seed: []
+  },
+  {
+    key: 'habitats',
+    name: '栖息地管理',
+    icon: '🏡',
+    desc: '管理首页「森林栖息地」卡片（数据库 boonie_habitat）',
+    api: '/api/admin/habitats',
+    columns: [
+      { key: 'emoji', label: '图标', type: 'text' },
+      { key: 'name', label: '名称', type: 'text' },
+      { key: 'description', label: '简介', type: 'textarea' },
+      { key: 'residents', label: '居民', type: 'text' },
+      { key: 'mood', label: '当前状态', type: 'text' },
+      { key: 'color', label: '主题色', type: 'color' }
+    ],
+    seed: []
+  },
+  {
+    key: 'tickets',
+    name: '门票管理',
+    icon: '🎫',
+    desc: '维护票种价格与权益（数据库 boonie_ticket，订票页同步生效）',
+    api: '/api/admin/tickets',
+    columns: [
+      { key: 'typeCode', label: '票种编码', type: 'text' },
+      { key: 'emoji', label: '图标', type: 'text' },
+      { key: 'name', label: '票种名称', type: 'text' },
+      { key: 'price', label: '售价(元)', type: 'number' },
+      { key: 'originalPrice', label: '原价(元)', type: 'number' },
+      { key: 'discountLabel', label: '优惠标签', type: 'text' },
+      { key: 'tagLabel', label: '角标', type: 'select', options: ['标准', '儿童优惠', '长者优惠', '热门', '夜场'] },
+      { key: 'descText', label: '一句话说明', type: 'text' },
+      { key: 'features', label: '权益说明(每行一条)', type: 'textarea' }
+    ],
+    seed: []
+  },
+  {
+    key: 'games',
+    name: '小游戏成绩管理',
+    icon: '🎮',
+    desc: '查询 / 修改 / 删除玩家成绩（数据库 boonie_game_score，可清作弊改榜单）',
+    api: '/api/admin/games',
+    columns: [
+      { key: 'gameId', label: '游戏', type: 'select', options: ['honey', 'mole', 'match'] },
+      { key: 'gameName', label: '游戏名称', type: 'text' },
+      { key: 'userName', label: '玩家', type: 'text' },
+      { key: 'bestScore', label: '最佳成绩', type: 'number' },
+      { key: 'plays', label: '游玩局数', type: 'number' },
+      { key: 'updatedAt', label: '最近更新', type: 'text' }
+    ],
+    seed: []
   },
   {
     key: 'routes',

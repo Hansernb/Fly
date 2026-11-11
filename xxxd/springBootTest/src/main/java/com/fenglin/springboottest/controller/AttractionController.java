@@ -21,7 +21,13 @@ public class AttractionController {
     @Autowired
     private AttractionService attractionService;
 
-    /** GET /api/attractions —— 返回全部游乐项目（含评价 + 综合评分），字段对齐前端 attractions.js */
+    /** 数据库未配风景图时的兜底图池（前端 public/img 已存在的资源，按项目 id 确定性取用） */
+    private static final String[] FALLBACK_IMGS = {
+            "/img/coaster.gif", "/img/ferris.jpeg", "/img/train.jpeg",
+            "/img/rafting.jpeg", "/img/maze.jpeg", "/img/waterfall.jpg"
+    };
+
+    /** GET /api/attractions —— 返回全部游乐项目（含评价 + 综合评分 + 风景图），字段对齐前端 attractions.js */
     @GetMapping("/attractions")
     public Map<String, Object> attractions() {
         List<Map<String, Object>> data = new ArrayList<>();
@@ -29,6 +35,7 @@ public class AttractionController {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", a.getId());
             m.put("emoji", a.getEmoji());
+            m.put("img", sceneryImg(a));
             m.put("name", a.getName());
             m.put("desc", a.getDescription());
             m.put("tag", a.getTag());
@@ -68,7 +75,7 @@ public class AttractionController {
         }
 
         String name = (String) body.getOrDefault("name", "匿名游客");
-        String avatar = sanitizeReviewAvatar((String) body.get("avatar"));
+        String avatar = sanitizeReviewAvatar((String) body.get("avatar"), name);
 
         Review r = attractionService.addReview(attractionId, name, avatar, rating, content);
 
@@ -79,24 +86,31 @@ public class AttractionController {
     }
 
     /**
-     * 评价头像只接受两种形态：
+     * 评价头像只接受三种形态：
      *  - 站内图片路径（默认头像 /img/defaults/…、上传头像 /api/avatar/…、以及历史 /img/xxx.jpg）
      *  - 纯 emoji（历史数据，如 🐻）
-     * 其它一律回退默认 emoji，避免把任意字符串写进库、或破坏前端 img src。
+     *  - 没传 / 传了无效值 → 按「评价人名字」确定性生成 emoji 头像（NameAvatar），
+     *    同名同头像、不同名字头像不同，避免游客评论清一色同一只熊。
      */
-    private String sanitizeReviewAvatar(String raw) {
-        String fallback = "🐻";
-        if (raw == null) return fallback;
-        String v = raw.trim();
-        if (v.isEmpty()) return fallback;
-        if (v.startsWith("/img/") || v.startsWith("/api/avatar/")) {
-            // 站内路径：不允许穿越与反斜杠，长度受字段 varchar(255) 限制
-            if (v.contains("..") || v.contains("\\") || v.length() > 255) return fallback;
-            return v;
+    private String sanitizeReviewAvatar(String raw, String name) {
+        if (raw != null) {
+            String v = raw.trim();
+            if (v.startsWith("/img/") || v.startsWith("/api/avatar/")) {
+                // 站内路径：不允许穿越与反斜杠，长度受字段 varchar(255) 限制
+                if (!v.contains("..") && !v.contains("\\") && v.length() <= 255) return v;
+            } else if (v.length() <= 16 && !v.contains(":") && !v.contains("/")) {
+                // 纯 emoji / 短文本
+                return v;
+            }
         }
-        // 纯 emoji / 短文本：放宽到 16 字符内且不含协议与斜杠
-        if (v.length() <= 16 && !v.contains(":") && !v.contains("/")) return v;
-        return fallback;
+        return attractionService.generateAvatar(name);
+    }
+
+    /** 风景图：优先取库里的 img 列；没有则按项目 id 从兜底图池确定性取一张，保证每个项目都有图 */
+    private String sceneryImg(Attraction a) {
+        String img = a.getImg();
+        if (img != null && !img.isBlank()) return img;
+        return FALLBACK_IMGS[(int) Math.floorMod(a.getId() == null ? 0L : a.getId(), FALLBACK_IMGS.length)];
     }
 
     private Map<String, Object> toReviewMap(Review r, String attractionName, Long attractionId) {

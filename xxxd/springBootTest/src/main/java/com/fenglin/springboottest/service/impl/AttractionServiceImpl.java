@@ -2,6 +2,7 @@ package com.fenglin.springboottest.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fenglin.springboottest.common.BizException;
+import com.fenglin.springboottest.common.NameAvatar;
 import com.fenglin.springboottest.entity.Attraction;
 import com.fenglin.springboottest.entity.Review;
 import com.fenglin.springboottest.mapper.AttractionMapper;
@@ -14,7 +15,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AttractionServiceImpl implements AttractionService {
@@ -48,13 +51,23 @@ public class AttractionServiceImpl implements AttractionService {
         Review r = new Review();
         r.setAttractionId(attractionId);
         r.setReviewerName(name == null || name.isBlank() ? "匿名游客" : name);
-        r.setAvatar(avatar == null || avatar.isBlank() ? "🐻" : avatar);
+        r.setAvatar(avatar == null || avatar.isBlank() ? generateAvatar(name) : avatar);
         r.setRating(rating);
         r.setContent(content);
         r.setReviewDate(LocalDate.now());
         r.setCreatedAt(LocalDateTime.now());
         reviewMapper.insert(r);
         return r;
+    }
+
+    /** 按名字生成头像：确定性 + 避开库里已占用的纯 emoji 头像，做到异名不同头像 */
+    @Override
+    public String generateAvatar(String reviewerName) {
+        Set<String> taken = new HashSet<>();
+        for (Review r : reviewMapper.selectList(null)) {
+            if (NameAvatar.isPlainEmoji(r.getAvatar())) taken.add(r.getAvatar());
+        }
+        return NameAvatar.emojiFor(reviewerName, taken);
     }
 
     private BigDecimal avgRating(List<Review> reviews) {

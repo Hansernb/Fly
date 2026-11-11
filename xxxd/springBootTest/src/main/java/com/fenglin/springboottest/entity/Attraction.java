@@ -21,6 +21,8 @@ public class Attraction {
     private String name;
     /** 项目图标 emoji */
     private String emoji;
+    /** 项目风景图路径（前端 /img/… 资源；空则接口层按项目 id 兜底） */
+    private String img;
     /** 项目具体内容（简介 / 玩法说明） */
     private String description;
     /** 标签：刺激 / 浪漫 / 亲子 / 清凉 / 益智 */

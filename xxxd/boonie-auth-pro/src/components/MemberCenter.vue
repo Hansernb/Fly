@@ -3,7 +3,17 @@
     <header class="mc-nav">
       <button class="mc-back" type="button" @click="emit('back')">← 返回首页</button>
       <div class="mc-brand">💎 森林会员中心</div>
-      <form class="mc-search" @submit.prevent="lookup">
+      <!-- 已登录：积分跟账号走，无需输入手机号 -->
+      <div v-if="loggedIn" class="mc-account">
+        <span class="mc-account-avatar">{{ user && user.avatar ? '👤' : '👤' }}</span>
+        <div class="mc-account-mid">
+          <b>{{ (user && (user.name || user.email)) || '当前账号' }}</b>
+          <span>积分已绑定此账号 · 换手机号买票也记在这里</span>
+        </div>
+      </div>
+
+      <!-- 未登录：游客可按手机号临时查一下 -->
+      <form v-else class="mc-search" @submit.prevent="lookup">
         <input
           v-model.trim="phoneInput"
           type="tel"
@@ -30,7 +40,11 @@
               <b class="mc-name">{{ member.nickname }}</b>
               <span class="mc-level">{{ member.levelIcon }} {{ member.levelName }}</span>
             </div>
-            <span class="mc-phone">{{ maskPhone(member.phone) }} · 注册于 {{ member.createdAt.slice(0, 10) || '—' }}</span>
+            <span class="mc-phone">
+              <template v-if="member.phone">{{ maskPhone(member.phone) }} · </template>
+              <template v-if="loggedIn">账号积分卡 · </template>
+              注册于 {{ member.createdAt.slice(0, 10) || '—' }}
+            </span>
           </div>
           <div class="mc-points">
             <b>{{ member.totalPoints }}</b>
@@ -117,16 +131,17 @@
       <!-- 未开通会员 -->
       <section v-else-if="looked && !loading" class="mc-none">
         <div class="mc-none-emoji">🪹</div>
-        <h2>这个手机号还没有会员档案</h2>
-        <p>无需注册：首次下单填这个手机号，系统会自动开通会员并送出积分。</p>
+        <h2>{{ loggedIn ? '这个账号还没有会员档案' : '这个手机号还没有会员档案' }}</h2>
+        <p v-if="loggedIn">用当前账号买一张门票，系统会自动开通会员，积分直接加到本账号名下。</p>
+        <p v-else>无需注册：首次下单填这个手机号，系统会自动开通会员并送出积分。</p>
         <button class="mc-cta" type="button" @click="emit('tickets')">🎫 去订票开通会员</button>
       </section>
 
       <!-- 初始引导 -->
       <section v-else-if="!loading" class="mc-none">
         <div class="mc-none-emoji">💎</div>
-        <h2>输入手机号查看会员卡</h2>
-        <p>会员与购票手机号绑定。买票时填过的手机号，这里输入就能自动登录并查看积分。</p>
+        <h2>登录后自动显示你的会员卡</h2>
+        <p>会员积分绑定登录账号：哪个账号买票，积分就加到哪个号上。也可以先输入手机号查游客积分。</p>
       </section>
 
       <div v-else class="mc-none">
@@ -170,6 +185,16 @@ const toast = ref('')
 let toastTimer = null
 
 const phoneInputOk = computed(() => /^1\d{10}$/.test(phoneInput.value))
+/** 是否已登录：登录后积分跟账号走，不再按手机号查 */
+const loggedIn = computed(() => !!props.token)
+
+/** 带令牌的请求头 */
+function authHeaders(json = false) {
+  const h = {}
+  if (props.token) h.Authorization = 'Bearer ' + props.token
+  if (json) h['Content-Type'] = 'application/json'
+  return h
+}
 const levelKey = computed(() => {
   const n = member.value?.levelName || ''
   if (n.includes('黄金')) return 'gold'
@@ -210,7 +235,7 @@ function applyMember(m) {
 }
 
 async function lookup() {
-  if (!phoneInputOk.value) {
+  if (!loggedIn.value && !phoneInputOk.value) {
     showToast('请输入 11 位手机号')
     return
   }
@@ -218,7 +243,9 @@ async function lookup() {
   looked.value = true
   avatarOpen.value = false
   try {
-    const res = await fetch(`/api/member?phone=${phoneInput.value}`)
+    // 登录态按账号查（积分跟账号走）；游客态按手机号查
+    const url = loggedIn.value ? '/api/member' : `/api/member?phone=${phoneInput.value}`
+    const res = await fetch(url, { headers: authHeaders() })
     const json = await res.json().catch(() => ({}))
     if (res.status === 404) {
       applyMember(null)
@@ -229,7 +256,13 @@ async function lookup() {
     applyMember(json?.data?.member)
     logs.value = Array.isArray(json?.data?.logs) ? json.data.logs : []
   } catch {
-    // 后端不可达 → 本地会员档案兜底
+    // 后端不可达 → 本地会员档案兜底（仅游客态，账号态不读本地避免串号）
+    if (loggedIn.value) {
+      showToast('会员信息加载失败，请稍后重试')
+      applyMember(null)
+      logs.value = []
+      return
+    }
     const local = loadLocalMember(phoneInput.value)
     const all = JSON.parse(localStorage.getItem('boonie_member_v1') || '{}')
     applyMember(local)
@@ -262,8 +295,8 @@ async function saveProfile(patch) {
   try {
     const res = await fetch('/api/member/profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: member.value.phone, ...patch })
+      headers: authHeaders(true),
+      body: JSON.stringify({ phone: member.value.phone || phoneInput.value, ...patch })
     })
     if (res.ok) {
       const json = await res.json()
@@ -289,6 +322,11 @@ async function saveProfile(patch) {
 }
 
 onMounted(() => {
+  // 已登录：直接按账号拉会员卡（换成别的手机号买票，积分仍记在同一张卡上）
+  if (loggedIn.value) {
+    lookup()
+    return
+  }
   try {
     const saved = localStorage.getItem(MEMBER_PHONE_KEY)
     if (saved) {
@@ -483,6 +521,32 @@ onMounted(() => {
   color: #7a5200;
   background: rgba(255, 183, 3, 0.28);
 }
+.mc-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #fffaf0;
+  border: 2px solid var(--wood-light);
+  border-radius: 14px;
+}
+.mc-account-avatar {
+  font-size: 18px;
+}
+.mc-account-mid {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.mc-account-mid b {
+  font-size: 14px;
+  color: #3c2f1e;
+}
+.mc-account-mid span {
+  font-size: 11.5px;
+  color: #8a7a63;
+}
+
 .mc-phone {
   display: block;
   margin-top: 6px;
