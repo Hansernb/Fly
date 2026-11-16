@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>森林斗兽棋 · 狗熊岭</title>
+<script>
+  /* 载入诊断：捕获脚本加载/运行错误（正式页面保留无妨，便于排查） */
+  window.__errs = []
+  window.addEventListener('error', function (e) {
+    var msg = e && e.target && e.target.src ? 'LOAD-FAIL ' + e.target.src : (e && e.message) || 'unknown'
+    window.__errs.push(msg)
+  }, true)
+</script>
+<style>
+  :root {
+    --cell: clamp(38px, min(10.6vw, 5.9vh), 58px);
+    --green: #2f7d4f;
+    --green-light: #4caf6d;
+    --yellow: #ffb703;
+    --wood: #a9743c;
+    --wood-dark: #7a4f22;
+    --cream: #fdf6e3;
+    --red: #d1495b;
+    --blue: #3b6ea5;
+    --ink: #3f2d1a;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+  }
+
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #fff8e0 0%, rgba(255, 248, 224, 0) 60%),
+      radial-gradient(900px 500px at 95% 0%, #e7f4dd 0%, rgba(231, 244, 221, 0) 55%),
+      linear-gradient(170deg, #fbf7ea 0%, #eef5e6 48%, #e5efd9 100%);
+    min-height: 100vh;
+    padding: 12px 12px 28px;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 12% 22%, rgba(76, 175, 109, 0.10) 0 4px, transparent 4px),
+      radial-gradient(circle at 88% 38%, rgba(255, 183, 3, 0.12) 0 5px, transparent 5px),
+      radial-gradient(circle at 32% 82%, rgba(169, 116, 60, 0.10) 0 4px, transparent 4px);
+    opacity: 0.9;
+  }
+
+  .jg-app {
+    position: relative;
+    max-width: 660px;
+    margin: 0 auto;
+    z-index: 1;
+  }
+
+  /* ---------------- 顶栏 ---------------- */
+  .jg-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px 12px;
+  }
+
+  .jg-back,
+  .jg-badge {
+    border: 1px solid rgba(122, 79, 34, 0.22);
+    background: rgba(255, 255, 255, 0.78);
+    color: #5c4326;
+    border-radius: 12px;
+    padding: 7px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    backdrop-filter: blur(4px);
+  }
+
+  .jg-back:hover,
+  .jg-badge:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(122, 79, 34, 0.16); }
+
+  .jg-title {
+    flex: 1;
+    text-align: center;
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 1px;
+    color: #4b3620;
+  }
+
+  .jg-badge[hidden] { display: none; }
+
+  /* ---------------- 通用屏幕 ---------------- */
+  .screen[hidden] { display: none; }
+
+  .hero {
+    background: linear-gradient(150deg, #ffffff 0%, #fff8e6 60%, #f6efd9 100%);
+    border: 1px solid rgba(169, 116, 60, 0.18);
+    border-radius: 22px;
+    padding: 20px 20px 18px;
+    box-shadow: 0 14px 32px rgba(122, 79, 34, 0.12);
+  }
+
+  .hero h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    letter-spacing: 2px;
+    color: #2f7d4f;
+  }
+
+  .hero p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: #6b563c;
+  }
+
+  .hero-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .hero-tags span {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(76, 175, 109, 0.12);
+    color: #2f7d4f;
+    border: 1px solid rgba(47, 125, 79, 0.18);
+  }
+
+  /* ---------------- 模式卡 ---------------- */
+  .mode-grid {
+    display: grid;
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .mode-card {
+    position: relative;
+    text-align: left;
+    border: 1px solid rgba(169, 116, 60, 0.2);
+    border-radius: 20px;
+    padding: 16px 18px;
+    background: linear-gradient(145deg, #fffdf6, #fdf3dc);
+    box-shadow: 0 8px 20px rgba(122, 79, 34, 0.1);
+    cursor: pointer;
+    transition: transform 0.16s, box-shadow 0.16s;
+    font-family: inherit;
+    color: inherit;
+    width: 100%;
+  }
+
+  .mode-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 26px rgba(122, 79, 34, 0.16);
+  }
+
+  .mc-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mc-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    border-radius: 12px;
+    background: radial-gradient(circle at 35% 30%, #fff4d2, #f0d19b);
+    box-shadow: inset 0 0 0 2px rgba(169, 116, 60, 0.28);
+  }
+
+  .mc-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #4b3620;
+  }
+
+  .mc-sub {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #8a7355;
+    margin-top: 3px;
+  }
+
+  .mc-desc {
+    font-size: 12.5px;
+    color: #7a664b;
+    margin: 10px 0 0;
+    line-height: 1.65;
+  }
+
+  .mc-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .mc-tag {
+    font-size: 11.5px;
+    color: #2f7d4f;
+    background: rgba(76, 175, 109, 0.12);
+    border-radius: 999px;
+    padding: 4px 9px;
+  }
+
+  .mc-go {
+    border: 0;
+    border-radius: 12px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(160deg, #4caf6d, #2f7d4f);
+    box-shadow: 0 6px 14px rgba(47, 125, 79, 0.28);
+    cursor: pointer;
+    font-family: inherit;
+    user-select: none;
+  }
+
+  .mc-go:active { transform: translateY(1px); }
+
+  .diff-row {
+    display: flex;
+    gap: 7px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .diff {
+    border: 1px solid rgba(169, 116, 60, 0.28);
+    background: #fffdf7;
+    color: #7a664b;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .diff.on {
+    background: linear-gradient(160deg, #ffd166, #ffb703);
+    border-color: #e8a300;
+    color: #5c4326;
+    box-shadow: 0 4px 10px rgba(255, 183, 3, 0.35);
+  }
+
+  .rules {
+    margin-top: 14px;
+    border: 1px dashed rgba(169, 116, 60, 0.35);
+    border-radius: 16px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.62);
+    font-size: 12.5px;
+    line-height: 1.85;
+    color: #6b563c;
+  }
+
+  .rules summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: #4b3620;
+    font-size: 13px;
+  }
+
+  .rules ul { margin: 8px 0 0; padding-left: 18px; }
+  .rules b { color: #2f7d4f; }
+
+  /* ---------------- 残局关卡 ---------------- */
+  .sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 4px 2px 12px;
+  }
+
+  .sec-head h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #4b3620;
+    letter-spacing: 1px;
+  }
+
+  .sec-head .link {
+    border: 0;
+    background: none;
+    color: #2f7d4f;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+
+  .level-card {
+    text-align: left;
+    border: 1px solid rgba(169, 116, 60, 0.22);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: linear-gradient(150deg, #fffdf6, #fbf0d8);
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+    box-shadow: 0 5px 14px rgba(122, 79, 34, 0.08);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  .level-card:hover:not(.locked) { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(122, 79, 34, 0.14); }
+
+  .level-card.locked {
+    cursor: not-allowed;
+    opacity: 0.62;
+    background: linear-gradient(150deg, #f4f0e5, #eae4d5);
+  }
+
+  .level-card.done {
+    border-color: rgba(47, 125, 79, 0.35);
+    background: linear-gradient(150deg, #f3fbf1, #e6f5e2);
+  }
+
+  .lc-no {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a9743c;
+    letter-spacing: 1px;
+  }
+
+  .lc-name {
+    display: block;
+    font-size: 15px;
+    font-weight: 800;
+    color: #4b3620;
+    margin: 4px 0 6px;
+  }
+
+  .lc-meta {
+    font-size: 11.5px;
+    color: #8a7355;
+  }
+
+  .achieve {
+    margin-top: 16px;
+    border-radius: 18px;
+    padding: 16px 18px;
+    background: linear-gradient(140deg, #fff6d9, #ffe9ae);
+    border: 1px solid rgba(232, 163, 0, 0.45);
+    box-shadow: 0 12px 26px rgba(232, 163, 0, 0.22);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .achieve[hidden] { display: none; }
+  .achieve .em { font-size: 30px; }
+  .achieve b { display: block; color: #7a5300; font-size: 15px; }
+  .achieve span { font-size: 12px; color: #8a6b1f; }
+
+  /* ---------------- 对局 ---------------- */
+  .hud {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .turn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 800;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(122, 79, 34, 0.12);
+    border: 1px solid rgba(169, 116, 60, 0.18);
+  }
+
+  .turn .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 0 4px rgba(209, 73, 91, 0.16);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  .turn.blue .dot { background: var(--blue); box-shadow: 0 0 0 4px rgba(59, 110, 165, 0.16); }
+  .turn.blue { color: var(--blue); }
+  .turn.red { color: var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.82); opacity: 0.7; }
+  }
+
+  .chip {
+    padding: 6px 11px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(169, 116, 60, 0.18);
+    color: #6b563c;
+  }
+
+  .chip.warn { color: #b26a00; background: #fff4dc; border-color: rgba(232, 163, 0, 0.4); }
+
+  .board-wrap {
+    display: flex;
+    justify-content: center;
+  }
+
+  .board-shell {
+    padding: 10px;
+    border-radius: 24px;
+    background: linear-gradient(150deg, #f6e3bd, #e8cfa2 55%, #dcc192);
+    box-shadow:
+      0 16px 34px rgba(122, 79, 34, 0.22),
+      inset 0 0 0 3px rgba(255, 250, 235, 0.7),
+      inset 0 0 0 5px rgba(169, 116, 60, 0.35);
+  }
+
+  #board {
+    position: relative;
+    width: calc(var(--cell) * 7);
+    height: calc(var(--cell) * 9);
+    border-radius: 14px;
+    background:
+      repeating-linear-gradient(0deg, rgba(122, 79, 34, 0.06) 0 1px, transparent 1px var(--cell)),
+      repeating-linear-gradient(90deg, rgba(122, 79, 34, 0.06) 0 1px, transparent 1px var(--cell)),
+      linear-gradient(160deg, #fdf0d5 0%, #f6e6c4 45%, #efdcb6 100%);
+    box-shadow: inset 0 0 22px rgba(169, 116, 60, 0.14);
+    overflow: hidden;
+  }
+
+  .cell {
+    position: absolute;
+    width: var(--cell);
+    height: var(--cell);
+    cursor: pointer;
+  }
+
+  .cell.water {
+    background: linear-gradient(180deg, #c7e9f7 0%, #a9d9ef 100%);
+    box-shadow: inset 0 0 10px rgba(66, 150, 190, 0.28);
+  }
+
+  .river-ripple {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 45%);
+  }
+
+  .river-ripple::before,
+  .river-ripple::after {
+    content: "";
+    position: absolute;
+    left: -12%;
+    width: 124%;
+    height: 7px;
+    border-radius: 50%;
+    border-top: 2px solid rgba(255, 255, 255, 0.85);
+    animation: flow 5.5s linear infinite;
+  }
+
+  .river-ripple::before { top: 22%; }
+  .river-ripple::after { top: 62%; animation-duration: 7s; animation-direction: reverse; opacity: 0.7; }
+
+  @keyframes flow {
+    0% { transform: translateX(-14%); }
+    50% { transform: translateX(10%); }
+    100% { transform: translateX(-14%); }
+  }
+
+  .cell.den::before {
+    content: "";
+    position: absolute;
+    inset: 9%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 38%, #33210f 0%, #55341a 38%, #6b4423 62%, #a9743c 82%, #d8b982 100%);
+    box-shadow: inset 0 6px 10px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(255, 252, 240, 0.55);
+  }
+
+  .cell.den.den-red::before { box-shadow: inset 0 6px 10px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(209, 73, 91, 0.75); }
+  .cell.den.den-blue::before { box-shadow: inset 0 6px 10px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(59, 110, 165, 0.75); }
+
+  .cell.trap::after {
+    content: "陷";
+    position: absolute;
+    inset: 16%;
+    border-radius: 50%;
+    border: 2px dashed rgba(169, 116, 60, 0.6);
+    color: rgba(169, 116, 60, 0.66);
+    font-size: calc(var(--cell) * 0.3);
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 244, 214, 0.35);
+  }
+
+  .cell.trap.trap-blue::after { border-color: rgba(59, 110, 165, 0.5); color: rgba(59, 110, 165, 0.6); }
+  .cell.trap.trap-red::after { border-color: rgba(209, 73, 91, 0.5); color: rgba(209, 73, 91, 0.6); }
+
+  /* 棋子层 */
+  #pieces,
+  #targets {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .piece {
+    position: absolute;
+    width: calc(var(--cell) * 0.84);
+    height: calc(var(--cell) * 0.84);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    background: radial-gradient(circle at 32% 26%, #fffaf0 0%, #f8e2b8 45%, #e6c184 74%, #cfa15c 100%);
+    box-shadow:
+      0 3px 0 rgba(122, 79, 34, 0.5),
+      0 6px 12px rgba(70, 45, 15, 0.28),
+      inset 0 0 0 3px var(--ring),
+      inset 0 0 0 5px rgba(255, 255, 255, 0.42);
+    transition:
+      left 0.19s cubic-bezier(0.34, 1.3, 0.5, 1),
+      top 0.19s cubic-bezier(0.34, 1.3, 0.5, 1),
+      transform 0.16s ease,
+      box-shadow 0.16s ease,
+      opacity 0.18s ease;
+    z-index: 4;
+    will-change: left, top;
+  }
+
+  .piece.red { --ring: #d1495b; }
+  .piece.blue { --ring: #3b6ea5; }
+
+  .piece .em {
+    font-size: calc(var(--cell) * 0.42);
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.6));
+  }
+
+  .piece .nm {
+    font-size: calc(var(--cell) * 0.2);
+    font-weight: 800;
+    margin-top: 1px;
+    color: #6b4a22;
+    opacity: 0.95;
+    transform: scale(0.95);
+  }
+
+  .piece.red .nm { color: #a8324a; }
+  .piece.blue .nm { color: #2b5786; }
+
+  .piece.sel {
+    transform: translateY(-2px) scale(1.07);
+    box-shadow:
+      0 6px 0 rgba(122, 79, 34, 0.42),
+      0 10px 18px rgba(70, 45, 15, 0.3),
+      inset 0 0 0 3px var(--ring),
+      inset 0 0 0 5px rgba(255, 255, 255, 0.5),
+      0 0 0 4px rgba(255, 183, 3, 0.55);
+  }
+
+  .piece.dying {
+    transform: scale(1.4) rotate(10deg);
+    opacity: 0;
+    z-index: 3;
+  }
+
+  .piece.last-moved { animation: pop 0.28s ease; }
+
+  @keyframes pop {
+    0% { transform: scale(1); }
+    55% { transform: scale(1.11); }
+    100% { transform: scale(1); }
+  }
+
+  /* 可走格提示 */
+  .dot {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(47, 125, 79, 0.42);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+    animation: dot-in 0.16s ease both;
+  }
+
+  .dot.cap {
+    background: transparent;
+    border: 3px dashed rgba(209, 73, 91, 0.85);
+    box-shadow: 0 0 0 3px rgba(255, 240, 240, 0.5), 0 0 12px rgba(209, 73, 91, 0.25);
+    animation: cap-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes dot-in {
+    from { transform: scale(0.3); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes cap-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+
+  .hint {
+    margin: 12px auto 0;
+    max-width: 460px;
+    text-align: center;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #7a664b;
+    min-height: 20px;
+  }
+
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    border: 1px solid rgba(169, 116, 60, 0.28);
+    background: #fffdf6;
+    color: #5c4326;
+    border-radius: 13px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 5px 12px rgba(122, 79, 34, 0.1);
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  }
+
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 9px 18px rgba(122, 79, 34, 0.16); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn.primary {
+    background: linear-gradient(160deg, #4caf6d, #2f7d4f);
+    border-color: #2f7d4f;
+    color: #fff;
+    box-shadow: 0 7px 16px rgba(47, 125, 79, 0.3);
+  }
+
+  .btn.gold {
+    background: linear-gradient(160deg, #ffd166, #ffb703);
+    border-color: #e8a300;
+    color: #5c4326;
+    box-shadow: 0 7px 16px rgba(255, 183, 3, 0.32);
+  }
+
+  /* ---------------- 结算浮层 ---------------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(58, 42, 24, 0.42);
+    backdrop-filter: blur(5px);
+    z-index: 50;
+    animation: fade-in 0.2s ease;
+  }
+
+  .overlay[hidden] { display: none; }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  .result {
+    width: min(360px, 92vw);
+    text-align: center;
+    border-radius: 24px;
+    padding: 24px 22px 20px;
+    background: linear-gradient(160deg, #fffdf6, #fdf2d9);
+    border: 1px solid rgba(169, 116, 60, 0.25);
+    box-shadow: 0 24px 56px rgba(58, 42, 24, 0.34);
+    animation: rise 0.26s cubic-bezier(0.24, 1.2, 0.44, 1);
+  }
+
+  @keyframes rise {
+    from { transform: translateY(18px) scale(0.94); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .result .em { font-size: 44px; line-height: 1; }
+  .result h2 { margin: 10px 0 6px; font-size: 20px; color: #4b3620; letter-spacing: 1px; }
+  .result p { margin: 0 0 16px; font-size: 13px; line-height: 1.7; color: #7a664b; }
+  .result-acts { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(10px);
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(61, 44, 24, 0.9);
+    color: #fff4dc;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 80;
+  }
+
+  .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 420px) {
+    body { padding: 8px 8px 22px; }
+    .hero { padding: 16px; }
+    .hero h1 { font-size: 22px; }
+    .mode-card { padding: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="jg-app">
+  <header class="jg-top">
+    <button class="jg-back" id="btnBack" type="button">← 返回</button>
+    <div class="jg-title">🐯 森林斗兽棋</div>
+    <div class="jg-badge" id="topBadge" hidden title="全关卡通关徽章">🏅</div>
+  </header>
+
+  <!-- ============ 主菜单 ============ -->
+  <section class="screen" id="screenMenu">
+    <div class="hero">
+      <h1>森林斗兽棋</h1>
+      <p>7×9 的狗熊岭战场，红蓝两军隔河对峙。大吃小、同级同归于尽、鼠能吞象——冲进对方树洞兽穴，就是胜利。</p>
+      <div class="hero-tags">
+        <span>🐭 鼠能下水</span>
+        <span>🐯 狮虎跳河</span>
+        <span>🕳 陷阱战力归零</span>
+        <span>🏅 全通关有徽章</span>
+      </div>
+    </div>
+
+    <div class="mode-grid">
+      <button class="mode-card" data-mode="pvp" type="button">
+        <div class="mc-head">
+          <div class="mc-icon">👫</div>
+          <div>
+            <div class="mc-title">双人对战</div>
+            <span class="mc-sub">同一台设备，轮流走子</span>
+          </div>
+        </div>
+        <p class="mc-desc">红方先行。两人同屏对坐，一人执红一人执蓝，适合和朋友来一局。</p>
+        <div class="mc-foot">
+          <span class="mc-tag">不限时</span>
+          <span class="mc-go">开始对局</span>
+        </div>
+      </button>
+
+      <button class="mode-card" data-mode="ai" type="button">
+        <div class="mc-head">
+          <div class="mc-icon">🤖</div>
+          <div>
+            <div class="mc-title">人机对战</div>
+            <span class="mc-sub">你执红，森林 AI 执蓝</span>
+          </div>
+        </div>
+        <p class="mc-desc">简单 = 随手乱走；普通 = 盯着吃子；困难 = 两层搜索，还会护住自家兽穴。</p>
+        <div class="diff-row" id="diffRow">
+          <span class="diff" data-diff="easy">简单</span>
+          <span class="diff on" data-diff="normal">普通</span>
+          <span class="diff" data-diff="hard">困难</span>
+        </div>
+        <div class="mc-foot">
+          <span class="mc-tag" id="aiTag">当前：普通</span>
+          <span class="mc-go">开始对局</span>
+        </div>
+      </button>
+
+      <button class="mode-card" data-mode="puzzle" type="button">
+        <div class="mc-head">
+          <div class="mc-icon">🧩</div>
+          <div>
+            <div class="mc-title">残局挑战</div>
+            <span class="mc-sub">7 个残局，限定步数取胜</span>
+          </div>
+        </div>
+        <p class="mc-desc">每关固定棋局，用最少的步数冲进对方兽穴。通关自动解锁下一关，进度保存在本机。</p>
+        <div class="mc-foot">
+          <span class="mc-tag" id="puzzleTag">已通关 0 / 7</span>
+          <span class="mc-go">进入关卡</span>
+        </div>
+      </button>
+    </div>
+
+    <details class="rules">
+      <summary>规则速览（点开看看）</summary>
+      <ul>
+        <li><b>走子</b>：棋子上下左右走一格，不能进自家兽穴。</li>
+        <li><b>吃子</b>：大吃小，鼠(1) &lt; 猫(2) &lt; 狗(3) &lt; 狼(4) &lt; 猴(5) &lt; 虎(6) &lt; 狮(7) &lt; 象(8)。</li>
+        <li><b>同级</b>：双方棋子同归于尽；<b>鼠可吃象</b>，象吃不了鼠。</li>
+        <li><b>河流</b>：只有鼠能下水；水中鼠吃不到岸上的子，岸上的子也吃不到它。</li>
+        <li><b>跳河</b>：狮、虎可横竖跳过整段河；河里只要有鼠就跳不过去。</li>
+        <li><b>陷阱</b>：站进敌方陷阱的棋子战力变 0，谁都能吃它。</li>
+        <li><b>胜负</b>：进对方兽穴、吃光对方、或对方无子可走，即获胜。</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- ============ 残局关卡列表 ============ -->
+  <section class="screen" id="screenLevels" hidden>
+    <div class="sec-head">
+      <h2>🧩 残局挑战</h2>
+      <button class="link" id="btnLevelsBack" type="button">← 回大厅</button>
+    </div>
+    <div class="level-grid" id="levelGrid"></div>
+    <div class="achieve" id="achieveBox" hidden>
+      <div class="em">🏅</div>
+      <div>
+        <b>森林棋圣 · 全关卡通关</b>
+        <span>七个残局全部拿下，狗熊岭的动物们都服你了！</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 对局 ============ -->
+  <section class="screen" id="screenGame" hidden>
+    <div class="hud">
+      <div class="turn red" id="turnBox"><span class="dot"></span><span id="turnText">红方走棋</span></div>
+      <span class="chip" id="modeChip">双人对战</span>
+      <span class="chip" id="stepChip">第 0 手</span>
+      <span class="chip warn" id="limitChip" hidden>剩余 0 步</span>
+    </div>
+
+    <div class="board-wrap">
+      <div class="board-shell">
+        <div id="board">
+          <div id="targets"></div>
+          <div id="pieces"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="hint" id="hint"></p>
+
+    <div class="controls">
+      <button class="btn" id="btnUndo" type="button">↩ 悔一步</button>
+      <button class="btn gold" id="btnRestart" type="button">↻ 重新开局</button>
+      <button class="btn" id="btnQuit" type="button">🏠 返回菜单</button>
+    </div>
+  </section>
+</div>
+
+<!-- ============ 结算 ============ -->
+<div class="overlay" id="overlay" hidden>
+  <div class="result">
+    <div class="em" id="rsEmoji">🎉</div>
+    <h2 id="rsTitle">红方胜利</h2>
+    <p id="rsText"></p>
+    <div class="result-acts" id="rsActs"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict'
+
+  /* 规则引擎独立在 engine.js：动态加载（带重试 + 缓存穿透，兼容各类静态服务器与 CDN） */
+  function boot() {
+    const E = window.JungleEngine
+    const PROGRESS_KEY = 'boonie_jungle_progress_v1'
+  const ANIMALS = E.ANIMALS
+
+  /* ============================ DOM ============================ */
+  const $ = (id) => document.getElementById(id)
+  const screenMenu = $('screenMenu')
+  const screenLevels = $('screenLevels')
+  const screenGame = $('screenGame')
+  const boardEl = $('board')
+  const piecesEl = $('pieces')
+  const targetsEl = $('targets')
+  const overlay = $('overlay')
+  const hintEl = $('hint')
+  const turnBox = $('turnBox')
+  const turnText = $('turnText')
+  const modeChip = $('modeChip')
+  const stepChip = $('stepChip')
+  const limitChip = $('limitChip')
+  const btnUndo = $('btnUndo')
+  const btnRestart = $('btnRestart')
+  const btnQuit = $('btnQuit')
+  const levelGrid = $('levelGrid')
+  const achieveBox = $('achieveBox')
+  const puzzleTag = $('puzzleTag')
+  const diffRow = $('diffRow')
+  const aiTag = $('aiTag')
+  const topBadge = $('topBadge')
+  const toastEl = $('toast')
+
+  /* ============================ 状态 ============================ */
+  let mode = 'pvp'          // pvp | ai | puzzle
+  let difficulty = 'normal'
+  let level = null          // 当前残局对象
+  let state = null          // 引擎状态
+  let selected = null       // 选中棋子 id
+  let legalForSel = []      // 选中棋子的合法走法
+  let history = []          // 快照栈
+  let stepsUsed = 0         // 残局：红方已用步数
+  let busy = false          // AI 思考中 / 动画中
+  let aiTimer = 0
+  let pieceEls = new Map()
+  let cells = []
+  let lastMovedId = null
+  let running = false
+
+  let progress = loadProgress()
+
+  /* ============================ 存档 ============================ */
+  function loadProgress() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}')
+      const cleared = Array.isArray(raw.cleared) ? raw.cleared.filter((n) => typeof n === 'number') : []
+      return { cleared: cleared, wins: raw.wins || { pvp: 0, ai: 0, hard: 0 } }
+    } catch (e) {
+      return { cleared: [], wins: { pvp: 0, ai: 0, hard: 0 } }
+    }
+  }
+
+  function saveProgress() {
+    try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)) } catch (e) { /* 忽略 */ }
+  }
+
+  function isCleared(id) { return progress.cleared.indexOf(id) >= 0 }
+  function unlocked(id) { return id === 1 || isCleared(id - 1) }
+  function allCleared() { return E.LEVELS.every((l) => isCleared(l.id)) }
+
+  /* ============================ 工具 ============================ */
+  function toast(msg) {
+    toastEl.textContent = msg
+    toastEl.classList.add('on')
+    clearTimeout(toast._t)
+    toast._t = setTimeout(() => toastEl.classList.remove('on'), 1600)
+  }
+
+  function px(v) { return 'calc(var(--cell) * ' + v + ')' }
+
+  function place(el, c, r, ratio, offset) {
+    const off = offset || 0
+    el.style.left = 'calc(var(--cell) * ' + (c + off) + ')'
+    el.style.top = 'calc(var(--cell) * ' + (r + off) + ')'
+    if (ratio) {
+      el.style.width = 'calc(var(--cell) * ' + ratio + ')'
+      el.style.height = 'calc(var(--cell) * ' + ratio + ')'
+    }
+  }
+
+  function showScreen(which) {
+    screenMenu.hidden = which !== 'menu'
+    screenLevels.hidden = which !== 'levels'
+    screenGame.hidden = which !== 'game'
+    running = which === 'game'
+  }
+
+  /* ============================ 棋盘渲染 ============================ */
+  function buildBoard() {
+    boardEl.querySelectorAll('.cell, .river-ripple').forEach((n) => n.remove())
+    cells = []
+    for (let r = 0; r < E.ROWS; r++) {
+      for (let c = 0; c < E.COLS; c++) {
+        const cell = document.createElement('div')
+        const terrain = E.terrainAt(c, r)
+        cell.className = 'cell ' + terrain.replace('den-', 'den den-').replace('trap-', 'trap trap-')
+        if (terrain === 'water') cell.classList.add('water')
+        cell.dataset.c = c
+        cell.dataset.r = r
+        place(cell, c, r)
+        cell.addEventListener('click', () => onCellClick(c, r))
+        boardEl.insertBefore(cell, targetsEl)
+        cells.push(cell)
+      }
+    }
+    // 河面波纹（左右两段）
+    ;[[1, 3, 2, 3], [4, 3, 2, 3]].forEach((g) => {
+      const rp = document.createElement('div')
+      rp.className = 'river-ripple'
+      rp.style.left = px(g[0])
+      rp.style.top = px(g[1])
+      rp.style.width = px(g[2])
+      rp.style.height = px(g[3])
+      boardEl.insertBefore(rp, targetsEl)
+    })
+    piecesEl.innerHTML = ''
+    targetsEl.innerHTML = ''
+    pieceEls = new Map()
+  }
+
+  function makePieceEl(p) {
+    const el = document.createElement('div')
+    el.className = 'piece ' + p.side
+    el.dataset.id = p.id
+    const animal = ANIMALS[p.type]
+    el.innerHTML = '<span class="em">' + animal.emoji + '</span><span class="nm">' + animal.name + '</span>'
+    el.title = (p.side === 'red' ? '红方' : '蓝方') + animal.name + '·战力' + animal.rank
+    place(el, p.c, p.r, 0.84, 0.08)
+    piecesEl.appendChild(el)
+    pieceEls.set(p.id, el)
+    return el
+  }
+
+  /** 从 state 同步棋子（含吃子消失动画） */
+  function syncPieces() {
+    const alive = new Set(state.pieces.map((p) => p.id))
+    pieceEls.forEach((el, id) => {
+      if (!alive.has(id)) {
+        if (!el.classList.contains('dying')) {
+          el.classList.add('dying')
+          setTimeout(() => el.remove(), 260)
+        }
+        pieceEls.delete(id)
+      }
+    })
+    state.pieces.forEach((p) => {
+      const el = pieceEls.get(p.id) || makePieceEl(p)
+      el.classList.toggle('sel', p.id === selected)
+      place(el, p.c, p.r, 0.84, 0.08)
+      el.style.zIndex = p.id === lastMovedId ? 6 : 4
+    })
+  }
+
+  function renderTargets() {
+    targetsEl.innerHTML = ''
+    if (!selected) return
+    const size = 0.3
+    legalForSel.forEach((m) => {
+      const dot = document.createElement('div')
+      dot.className = 'dot' + (m.captureId ? ' cap' : '')
+      const s = m.captureId ? 0.82 : size
+      place(dot, m.to.c + (1 - s) / 2, m.to.r + (1 - s) / 2, s)
+      targetsEl.appendChild(dot)
+    })
+  }
+
+  /* ============================ 交互 ============================ */
+  function humanControls(side) {
+    if (mode === 'pvp') return true
+    return side === 'red'
+  }
+
+  function onCellClick(c, r) {
+    if (!running || busy || !state || state.winner) return
+
+    // 1) 已选中又点了合法目标 → 走子
+    if (selected) {
+      const mv = legalForSel.find((m) => m.to.c === c && m.to.r === r)
+      if (mv) { doMove(mv); return }
+    }
+
+    const p = E.pieceAt(state, c, r)
+    if (p && p.side === state.turn && humanControls(p.side)) {
+      if (selected === p.id) { clearSelection(); return }
+      selected = p.id
+      legalForSel = E.movesOfPiece(state, p.id)
+      syncPieces()
+      renderTargets()
+      hint(p.id)
+      return
+    }
+    if (selected && !mvExists(c, r)) clearSelection()
+  }
+
+  function mvExists(c, r) {
+    return legalForSel.some((m) => m.to.c === c && m.to.r === r)
+  }
+
+  function clearSelection() {
+    selected = null
+    legalForSel = []
+    syncPieces()
+    renderTargets()
+  }
+
+  function hint(pieceId) {
+    if (!pieceId) {
+      hintEl.textContent = mode === 'puzzle' && level ? level.tips : '点自己的棋子看可走位置，再点目标格落子。'
+      return
+    }
+    const p = state.pieces.find((x) => x.id === pieceId)
+    if (!p) return
+    const a = ANIMALS[p.type]
+    const caps = legalForSel.filter((m) => m.captureId)
+    let text = a.emoji + ' ' + (p.side === 'red' ? '红' : '蓝') + a.name + '：可走 ' + legalForSel.length + ' 格'
+    if (caps.length) {
+      const names = caps.map((m) => ANIMALS[m.captureType].name).join('、')
+      text += '，可吃 ' + names
+    }
+    hintEl.textContent = text
+  }
+
+  /* ============================ 走子 ============================ */
+  function snapshot() {
+    history.push({
+      state: E.cloneState(state),
+      stepsUsed: stepsUsed
+    })
+  }
+
+  function doMove(move) {
+    if (!state || state.winner) return
+    snapshot()
+
+    const mover = state.turn
+    const result = E.applyMove(state, move)
+
+    // 残局：统计红方步数
+    if (mode === 'puzzle' && mover === 'red') stepsUsed += 1
+
+    selected = null
+    legalForSel = []
+    lastMovedId = move.pieceId
+    state = result.state
+
+    syncPieces()
+    renderTargets()
+    updateHud()
+
+    if (mode === 'puzzle' && level) {
+      // 步数用尽且还没赢 → 失败
+      if (!state.winner && stepsUsed >= level.limit) {
+        finish('fail', '步数用尽')
+        return
+      }
+    }
+
+    if (state.winner) { finish(state.winner); return }
+
+    if (move.captureId) {
+      hintEl.textContent = result.mutual ? '同级相撞，两败俱伤！' : '一口吃掉了 ' + ANIMALS[result.captured.type].name + '！'
+    } else if (move.jump) {
+      hintEl.textContent = '狮虎跃过河面，落地！'
+    } else {
+      hintEl.textContent = ''
+    }
+
+    // AI 回合
+    if (mode !== 'pvp' && state.turn === 'blue' && !state.winner) {
+      busy = true
+      updateHud()
+      aiTimer = setTimeout(aiMove, 420)
+    }
+  }
+
+  function aiMove() {
+    if (!running || !state || state.winner) { busy = false; return }
+    const lv = mode === 'puzzle' ? 'hard' : difficulty
+    const mv = E.chooseMove(state, lv)
+    if (!mv) { busy = false; return }
+    busy = false
+    doMove(mv)
+  }
+
+  /* ============================ HUD ============================ */
+  function updateHud() {
+    const isRed = state.turn === 'red'
+    turnBox.className = 'turn ' + (isRed ? 'red' : 'blue')
+    turnText.textContent = state.winner
+      ? (state.winner === 'red' ? '红方胜' : '蓝方胜')
+      : (isRed ? '红方走棋' : '蓝方走棋')
+
+    modeChip.textContent = mode === 'pvp'
+      ? '双人对战'
+      : mode === 'ai'
+        ? '人机 · ' + ({ easy: '简单', normal: '普通', hard: '困难' })[difficulty]
+        : '残局 · ' + (level ? '第 ' + level.id + ' 关 ' + level.name : '')
+
+    stepChip.textContent = mode === 'puzzle'
+      ? '已用 ' + stepsUsed + ' 步'
+      : '第 ' + Math.ceil((state.ply || 0) / 2) + ' 回合'
+
+    if (mode === 'puzzle' && level) {
+      limitChip.hidden = false
+      limitChip.textContent = '剩余 ' + Math.max(0, level.limit - stepsUsed) + ' 步'
+    } else {
+      limitChip.hidden = true
+    }
+
+    btnUndo.disabled = !history.length
+  }
+
+  /* ============================ 开局 ============================ */
+  function startGame(opts) {
+    mode = opts.mode
+    level = opts.level || null
+    difficulty = opts.difficulty || difficulty
+    state = level ? E.createState(level.pieces) : E.createInitialState()
+    selected = null
+    legalForSel = []
+    history = []
+    stepsUsed = 0
+    busy = false
+    lastMovedId = null
+    clearTimeout(aiTimer)
+
+    showScreen('game')
+    buildBoard()
+    syncPieces()
+    renderTargets()
+    updateHud()
+    hintEl.textContent = level ? level.tips : '红方先行，点棋子 → 点目标格走子。'
+    hideOverlay()
+  }
+
+  function restart() {
+    if (mode === 'puzzle' && level) startGame({ mode: 'puzzle', level: level })
+    else startGame({ mode: mode, difficulty: difficulty })
+  }
+
+  function quit() {
+    clearTimeout(aiTimer)
+    busy = false
+    running = false
+    state = null
+    hideOverlay()
+    if (mode === 'puzzle') renderLevels()
+    showScreen(mode === 'puzzle' ? 'levels' : 'menu')
+    updateMenuTags()
+  }
+
+  /* ============================ 悔棋 ============================ */
+  function undo() {
+    if (!history.length) return
+    clearTimeout(aiTimer)
+    busy = false
+
+    let snap = history.pop()
+    // AI / 残局模式下，一直退回到轮到自己（红方）走的局面
+    if (mode !== 'pvp') {
+      while (snap && snap.state.turn !== 'red' && history.length) snap = history.pop()
+    }
+    if (!snap) return
+
+    state = snap.state
+    stepsUsed = snap.stepsUsed
+    selected = null
+    legalForSel = []
+    lastMovedId = null
+    busy = false
+    state.winner = null
+    hideOverlay()
+    syncPieces()
+    renderTargets()
+    updateHud()
+    hintEl.textContent = '已悔回上一步。'
+  }
+
+  /* ============================ 结算 ============================ */
+  function hideOverlay() {
+    overlay.hidden = true
+    $('rsActs').innerHTML = ''
+  }
+
+  function finish(winner, reason) {
+    busy = false
+    clearTimeout(aiTimer)
+    updateHud()
+
+    const isPuzzle = mode === 'puzzle'
+    const humanWon = winner === 'red'
+    let emoji = '🎉'
+    let title = ''
+    let text = ''
+
+    if (isPuzzle) {
+      if (winner === 'red') {
+        emoji = '🏆'
+        title = '通关！'
+        text = '第 ' + level.id + ' 关 · ' + level.name + ' 用 ' + stepsUsed + ' 步拿下（限 ' + level.limit + ' 步）。'
+        if (!isCleared(level.id)) {
+          progress.cleared.push(level.id)
+          progress.cleared.sort((a, b) => a - b)
+          saveProgress()
+        }
+        if (allCleared()) {
+          text += ' 恭喜集齐全部残局，获得「森林棋圣」徽章！'
+          topBadge.hidden = false
+        }
+        updateMenuTags()
+      } else {
+        emoji = '💧'
+        title = reason === '步数用尽' ? '步数用尽' : '挑战失败'
+        text = reason === '步数用尽'
+          ? '限定 ' + level.limit + ' 步都没能冲进兽穴，再想想走法吧。'
+          : '蓝方守住了兽穴，换个顺序再试一次。'
+      }
+    } else {
+      if (winner === 'red') {
+        emoji = '🎉'
+        title = mode === 'ai' ? '你赢了！' : '红方胜利'
+        text = mode === 'ai'
+          ? '红方冲进蓝方兽穴，AI 认输～'
+          : '红方棋子冲进了蓝方树洞兽穴。'
+      } else {
+        emoji = '🐻'
+        title = mode === 'ai' ? 'AI 赢了' : '蓝方胜利'
+        text = mode === 'ai'
+          ? '蓝方棋子摸进了你的兽穴，再来一局？'
+          : '蓝方棋子冲进了红方树洞兽穴。'
+      }
+    }
+
+    const acts = $('rsActs')
+    acts.innerHTML = ''
+
+    const addBtn = (label, cls, fn) => {
+      const b = document.createElement('button')
+      b.className = 'btn ' + cls
+      b.type = 'button'
+      b.textContent = label
+      b.addEventListener('click', fn)
+      acts.appendChild(b)
+    }
+
+    if (isPuzzle && winner === 'red') {
+      const idx = E.LEVELS.findIndex((l) => l.id === level.id)
+      const next = E.LEVELS[idx + 1]
+      if (next) addBtn('下一关 →', 'primary', () => { hideOverlay(); startGame({ mode: 'puzzle', level: next }) })
+      addBtn('重玩本关', 'gold', () => restart())
+      addBtn('返回关卡', '', () => { hideOverlay(); quit() })
+    } else if (isPuzzle) {
+      addBtn('再来一次', 'primary', () => restart())
+      addBtn('返回关卡', '', () => { hideOverlay(); quit() })
+    } else {
+      addBtn('再来一局', 'primary', () => restart())
+      addBtn('返回大厅', '', () => { hideOverlay(); quit() })
+    }
+
+    $('rsEmoji').textContent = emoji
+    $('rsTitle').textContent = title
+    $('rsText').textContent = text
+    overlay.hidden = false
+  }
+
+  /* ============================ 菜单 / 关卡 ============================ */
+  function updateMenuTags() {
+    puzzleTag.textContent = '已通关 ' + progress.cleared.length + ' / ' + E.LEVELS.length
+    aiTag.textContent = '当前：' + ({ easy: '简单', normal: '普通', hard: '困难' })[difficulty]
+    topBadge.hidden = !allCleared()
+  }
+
+  function renderLevels() {
+    levelGrid.innerHTML = ''
+    E.LEVELS.forEach((lv) => {
+      const unlockedNow = unlocked(lv.id)
+      const done = isCleared(lv.id)
+      const card = document.createElement('button')
+      card.type = 'button'
+      card.className = 'level-card' + (unlockedNow ? '' : ' locked') + (done ? ' done' : '')
+      card.innerHTML =
+        '<span class="lc-no">第 ' + lv.id + ' 关 ' + (done ? '⭐' : '') + '</span>' +
+        '<span class="lc-name">' + (unlockedNow ? lv.name : '🔒 未解锁') + '</span>' +
+        '<span class="lc-meta">限 ' + lv.limit + ' 步 · ' + lv.pieces.filter((p) => p[0] === 'red').length + ' 攻 ' + lv.pieces.filter((p) => p[0] === 'blue').length + ' 守</span>'
+      card.addEventListener('click', () => {
+        if (!unlockedNow) { toast('先通关上一关才能解锁哦'); return }
+        startGame({ mode: 'puzzle', level: lv })
+      })
+      levelGrid.appendChild(card)
+    })
+    achieveBox.hidden = !allCleared()
+  }
+
+  /* ============================ 事件绑定 ============================ */
+  document.querySelectorAll('.mode-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const m = card.dataset.mode
+      if (m === 'pvp') startGame({ mode: 'pvp' })
+      else if (m === 'ai') startGame({ mode: 'ai', difficulty: difficulty })
+      else { renderLevels(); showScreen('levels'); running = false }
+    })
+  })
+
+  diffRow.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.diff')
+    if (!btn) return
+    ev.stopPropagation()
+    difficulty = btn.dataset.diff
+    diffRow.querySelectorAll('.diff').forEach((b) => b.classList.toggle('on', b === btn))
+    updateMenuTags()
+  })
+
+  $('btnLevelsBack').addEventListener('click', () => { showScreen('menu'); updateMenuTags() })
+  btnUndo.addEventListener('click', undo)
+  btnRestart.addEventListener('click', restart)
+  btnQuit.addEventListener('click', quit)
+
+  // 返回：iframe 里让父窗口关掉，独立打开则回上一页
+  $('btnBack').addEventListener('click', () => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'jungle:close' }, '*')
+    } else if (history.length > 1) {
+      history.back()
+    } else {
+      toast('点右上角浏览器返回即可')
+    }
+  })
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      if (!overlay.hidden) { hideOverlay(); return }
+      clearSelection()
+    }
+    if ((ev.key === 'z' || ev.key === 'Z') && (ev.ctrlKey || ev.metaKey)) { undo() }
+  })
+
+  /* ============================ 初始化 ============================ */
+  updateMenuTags()
+  showScreen('menu')
+  }
+
+  function loadEngine(attempt) {
+    if (window.JungleEngine) { boot(); return }
+    const bust = attempt ? '?v=2&r=' + attempt : '?v=2'
+    fetch('engine.js' + bust, { cache: 'reload' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        return r.text()
+      })
+      .then(function (code) {
+        if (window.JungleEngine) { boot(); return }
+        // 引擎 UMD 会显式挂到 window.JungleEngine，全局 eval 安全可控
+        const run = new Function(code)
+        run()
+        if (window.JungleEngine) boot()
+        else loadEngine(attempt + 1)
+      })
+      .catch(function () {
+        if (attempt < 4) loadEngine(attempt + 1)
+        else {
+          const h = document.getElementById('hint')
+          if (h) h.textContent = '规则引擎加载失败，请刷新页面重试。'
+        }
+      })
+  }
+
+  loadEngine(0)
+})()
+</script>
+</body>
+</html>

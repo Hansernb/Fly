@@ -17,12 +17,13 @@
         <div class="lobby-hero">
           <span class="lh-badge">🍯 狗熊岭限定</span>
           <h1>森林小游戏中心</h1>
-          <p>四款手绘小游戏，随手玩一局，看看你能拿多少分～</p>
+          <p>五款手绘小游戏，随手玩一局，看看你能拿多少分～</p>
           <div class="lh-chips">
             <span class="lh-chip">🏃 最佳 森林跑酷 {{ best.run }} 分</span>
             <span class="lh-chip">🍯 最佳 接蜂蜜 {{ best.honey }} 分</span>
             <span class="lh-chip">🐿️ 最佳 打松鼠 {{ best.mole }} 分</span>
             <span class="lh-chip">🃏 最少 {{ best.match || '—' }} 步配对</span>
+            <span class="lh-chip">🐯 斗兽棋 · 双人 / 人机 / 残局</span>
           </div>
         </div>
 
@@ -35,7 +36,9 @@
           >
             <div class="gc-cover" :class="'cov-' + g.id">
               <span class="gc-icon">{{ g.icon }}</span>
-              <span v-if="best[g.id]" class="gc-best">最佳 {{ best[g.id] }}{{ g.unit }}</span>
+              <span v-if="g.id === 'jungle' && jungleCleared" class="gc-best">通关 {{ jungleCleared }}/7</span>
+              <span v-else-if="best[g.id]" class="gc-best">最佳 {{ best[g.id] }}{{ g.unit }}</span>
+              <span v-else-if="g.badge" class="gc-best">{{ g.badge }}</span>
             </div>
             <div class="gc-body">
               <h3>{{ g.name }}</h3>
@@ -160,6 +163,22 @@
         </transition>
       </section>
     </main>
+
+    <!-- 森林斗兽棋：独立页面（public/games/jungle）内嵌，规则引擎与界面自包含 -->
+    <transition name="pop">
+      <div v-if="jungleOpen" class="jungle-mask" role="dialog" aria-label="森林斗兽棋">
+        <div class="jungle-shell">
+          <div class="jungle-bar">
+            <span class="jb-title">🐯 森林斗兽棋</span>
+            <div class="jb-acts">
+              <a class="jb-link" href="/games/jungle/index.html" target="_blank" rel="noopener">新窗口打开</a>
+              <button class="jb-close" type="button" @click="closeJungle">关闭</button>
+            </div>
+          </div>
+          <iframe class="jungle-frame" src="/games/jungle/index.html" title="森林斗兽棋"></iframe>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -211,10 +230,37 @@ const GAMES = [
     unit: '步',
     time: '不限时',
     desc: '翻开卡片找出成对的森林伙伴，用最少步数全部配对。'
+  },
+  {
+    id: 'jungle',
+    icon: '🐯',
+    name: '森林斗兽棋',
+    color: '#a9743c',
+    unit: '关',
+    time: '双人 / 人机 / 残局',
+    badge: '新玩法',
+    desc: '7×9 隔河对阵：大吃小、同级同归于尽、鼠能吞象。冲进对方树洞兽穴即胜，七道残局等你破。'
   }
 ]
 
 const active = ref('')
+const jungleOpen = ref(false)
+// 斗兽棋续关进度存在同源 localStorage（public/games/jungle 内写入）
+const jungleCleared = ref(0)
+
+function readJungleProgress() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('boonie_jungle_progress_v1') || '{}')
+    jungleCleared.value = Array.isArray(raw.cleared) ? raw.cleared.length : 0
+  } catch {
+    jungleCleared.value = 0
+  }
+}
+
+function closeJungle() {
+  jungleOpen.value = false
+  readJungleProgress()
+}
 const best = reactive({ run: 0, honey: 0, mole: 0, match: 0 })
 const result = ref(null)
 const activeGame = computed(() => GAMES.find((g) => g.id === active.value) || GAMES[0])
@@ -280,7 +326,11 @@ async function submitScore(gameId, score) {
   }
 }
 
-onMounted(loadScores)
+onMounted(() => {
+  loadScores()
+  readJungleProgress()
+  window.addEventListener('message', onJungleMessage)
+})
 
 /* ===================== 接蜂蜜（Canvas） ===================== */
 const honeyCanvas = ref(null)
@@ -1624,8 +1674,14 @@ const stageSub = computed(() => {
 
 function startGame(id) {
   stopAll()
-  active.value = id
   result.value = null
+  // 斗兽棋：打开独立页面浮层（自带规则引擎与三种模式）
+  if (id === 'jungle') {
+    active.value = ''
+    jungleOpen.value = true
+    return
+  }
+  active.value = id
   try {
     // 防止空格键触发刚才点击的按钮
     document.activeElement && document.activeElement.blur()
@@ -1636,6 +1692,11 @@ function startGame(id) {
   else if (id === 'run') nextTick(startRun)
   else if (id === 'mole') startMole()
   else startMatch()
+}
+
+/** 斗兽棋 iframe 内点「返回」时通知父页面关掉浮层 */
+function onJungleMessage(ev) {
+  if (ev && ev.data && ev.data.type === 'jungle:close') closeJungle()
 }
 
 function restart() {
@@ -1671,7 +1732,10 @@ function stopAll() {
   matchLock = false
 }
 
-onBeforeUnmount(stopAll)
+onBeforeUnmount(() => {
+  stopAll()
+  window.removeEventListener('message', onJungleMessage)
+})
 
 function leafStyle(i) {
   return {
@@ -2256,6 +2320,91 @@ function leafStyle(i) {
 .pop-leave-to {
   opacity: 0;
   transform: scale(0.94);
+}
+
+/* ===== 森林斗兽棋内嵌浮层 ===== */
+.jungle-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(28, 42, 24, 0.55);
+  backdrop-filter: blur(6px);
+}
+.jungle-shell {
+  width: min(760px, 100%);
+  height: min(92vh, 860px);
+  display: flex;
+  flex-direction: column;
+  background: #fdf8ec;
+  border: 3px solid var(--wood-light, #d9b982);
+  border-radius: 26px;
+  overflow: hidden;
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.5);
+}
+.jungle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #f7e6c4, #efd9ae);
+  border-bottom: 1px solid rgba(169, 116, 60, 0.3);
+}
+.jb-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #5c4326;
+  letter-spacing: 0.5px;
+}
+.jb-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.jb-link {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--forest-deep, #1f5c39);
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+}
+.jb-link:hover {
+  background: #fff;
+}
+.jb-close {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #4caf6d, #2f7d4f);
+  cursor: pointer;
+  font-family: inherit;
+}
+.jungle-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fbf7ea;
+}
+
+@media (max-width: 720px) {
+  .jungle-mask {
+    padding: 0;
+  }
+  .jungle-shell {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
 }
 
 @media (max-width: 720px) {
