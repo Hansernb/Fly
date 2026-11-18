@@ -18,6 +18,8 @@ import com.fenglin.springboottest.mapper.ShowMapper;
 import com.fenglin.springboottest.mapper.TicketMapper;
 import com.fenglin.springboottest.mapper.UserMapper;
 import com.fenglin.springboottest.service.AuthService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,7 +36,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "http://192.168.68.11:5173")
 public class AdminController {
 
     @Autowired
@@ -55,6 +57,8 @@ public class AdminController {
     private TicketMapper ticketMapper;
     @Autowired
     private GameScoreMapper gameScoreMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /** 统一鉴权：必须是管理员 */
     private User requireAdmin(String authHeader) {
@@ -574,7 +578,7 @@ public class AdminController {
         requireAdmin(auth);
         String gameId = str(body.get("gameId"));
         if (gameId == null || !gameId.matches("honey|mole|match"))
-            throw new BizException(400, "游戏编码只能是 honey / mole / match");
+            throw new BizException(400, "游戏编码只能是 honey / mole / match / run");
         String userName = str(body.get("userName"));
         if (userName == null || userName.isBlank()) throw new BizException(400, "玩家名不能为空");
 

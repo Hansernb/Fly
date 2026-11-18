@@ -6,7 +6,7 @@
     </div>
 
     <header class="gp-nav">
-      <button class="gp-back" type="button" @click="emit('back')">← 返回首页</button>
+      <button class="gp-back" type="button" @click="emit('back')">← 返回上一页</button>
       <div class="gp-brand">🎮 森林小游戏中心</div>
       <div class="gp-record">最高分：接蜂蜜 {{ best.honey }} / 打松鼠 {{ best.mole }} / 跑酷 {{ best.run }} / 翻牌 {{ best.match }} 步</div>
     </header>
@@ -239,7 +239,7 @@ const GAMES = [
     unit: '关',
     time: '双人 / 人机 / 残局',
     badge: '新玩法',
-    desc: '7×9 隔河对阵：大吃小、同级同归于尽、鼠能吞象。冲进对方树洞兽穴即胜，七道残局等你破。'
+    desc: '7×9 隔河对阵：鼠猫狗狼猴鸡虎狮象九兽大吃小、同级同归于尽、鼠能吞象。冲进对方树洞兽穴即胜，七道残局等你破。'
   }
 ]
 

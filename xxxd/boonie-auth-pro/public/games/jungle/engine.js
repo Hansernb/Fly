@@ -11,7 +11,7 @@
  *
  * 规则：
  *   1. 棋子向上下左右走一格，不能进己方兽穴；
- *   2. 大吃小（战力 1..8），同级同归于尽；鼠可吃象，象不能吃鼠；
+ *   2. 大吃小（战力 1..9），同级同归于尽；鼠可吃象，象不能吃鼠；
  *   3. 只有鼠能下水；水中鼠不能吃陆地棋，陆地棋（含象）也吃不了水中鼠；
  *   4. 狮/虎可横竖跳过整段河，但河道上只要有鼠就跳不过；
  *   5. 站在敌方陷阱里的棋子战力视为 0（可被任意敌子吃，也吃不动别人）；
@@ -33,9 +33,10 @@
     dog: { name: '狗', emoji: '🐶', rank: 3, value: 30 },
     wolf: { name: '狼', emoji: '🐺', rank: 4, value: 45 },
     monkey: { name: '猴', emoji: '🐵', rank: 5, value: 55 },
-    tiger: { name: '虎', emoji: '🐯', rank: 6, value: 90 },
-    lion: { name: '狮', emoji: '🦁', rank: 7, value: 100 },
-    elephant: { name: '象', emoji: '🐘', rank: 8, value: 115 }
+    chicken: { name: '鸡', emoji: '🐔', rank: 6, value: 60 },
+    tiger: { name: '虎', emoji: '🐯', rank: 7, value: 90 },
+    lion: { name: '狮', emoji: '🦁', rank: 8, value: 100 },
+    elephant: { name: '象', emoji: '🐘', rank: 9, value: 115 }
   }
 
   const DEN = { red: { c: 3, r: 8 }, blue: { c: 3, r: 0 } }
@@ -81,23 +82,25 @@
   /* ------------------------------ 状态 ------------------------------ */
 
   const INITIAL_LAYOUT = [
-    // 蓝方（上）：狮虎守两角，鼠象压边，狗猫狼猴居中
+    // 蓝方（上）：狮虎守两角，鼠象压边，狗鸡猫居中一排，猴狼居二排
     ['blue', 'lion', 0, 0],
     ['blue', 'tiger', 6, 0],
     ['blue', 'dog', 1, 1],
+    ['blue', 'chicken', 3, 1],
     ['blue', 'cat', 5, 1],
     ['blue', 'rat', 0, 2],
-    ['blue', 'wolf', 2, 2],
-    ['blue', 'monkey', 4, 2],
+    ['blue', 'monkey', 2, 2],
+    ['blue', 'wolf', 4, 2],
     ['blue', 'elephant', 6, 2],
     // 红方（下）：与上方左右镜像
     ['red', 'tiger', 0, 8],
     ['red', 'lion', 6, 8],
     ['red', 'cat', 1, 7],
+    ['red', 'chicken', 3, 7],
     ['red', 'dog', 5, 7],
     ['red', 'elephant', 0, 6],
-    ['red', 'wolf', 2, 6],
-    ['red', 'monkey', 4, 6],
+    ['red', 'monkey', 2, 6],
+    ['red', 'wolf', 4, 6],
     ['red', 'rat', 6, 6]
   ]
 

@@ -2,7 +2,7 @@
   <div class="map-page" :class="{ embedded }">
     <!-- 独立页顶部栏（内嵌首页时隐藏，由首页 section-title 提供标题） -->
     <div v-if="!embedded" class="map-top">
-      <button class="back-btn" type="button" @click="$emit('back')">← 返回首页</button>
+      <button class="back-btn" type="button" @click="$emit('back')">← 返回上一页</button>
       <h1 class="map-title">🗺️ 狗熊岭手绘游园地图</h1>
       <p class="map-sub">点击地图上的标记点，查看项目 / 餐厅 / 卫生间 / 停车场位置与简介</p>
     </div>

@@ -2,7 +2,7 @@
   <div class="attr-page">
     <!-- 页头 -->
     <header class="attr-head">
-      <button class="back-btn" type="button" @click="$emit('back')">‹ 返回首页</button>
+      <button class="back-btn" type="button" @click="$emit('back')">‹ 返回上一页</button>
       <h1>🎠 游乐项目</h1>
       <p class="sub">狗熊岭森林游乐园 · 全部热门项目一目了然</p>
     </header>

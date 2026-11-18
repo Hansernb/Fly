@@ -14,7 +14,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class AppConfig implements WebMvcConfigurer {
 
     /**
-     * 全局 CORS 兜底：各 Controller 虽有 @CrossOrigin(origins = "http://localhost:5173")，
+     * 全局 CORS 兜底：各 Controller 虽有 @CrossOrigin(origins = "http://192.168.68.11:5173")，
      * 但浏览器对同源 POST 也会携带 Origin 头（如 127.0.0.1:5174 / 局域网 IP），
      * 端口或主机一变就会被 403 Invalid CORS request 拒掉。
      * 这里放行所有来源（令牌走 Authorization 头、不用 Cookie，无 CSRF 风险）。

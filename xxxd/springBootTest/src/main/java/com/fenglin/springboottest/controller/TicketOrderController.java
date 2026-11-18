@@ -39,7 +39,7 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "http://192.168.68.11:5173")
 public class TicketOrderController {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

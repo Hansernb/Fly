@@ -1,7 +1,7 @@
 <template>
   <div class="mc-page">
     <header class="mc-nav">
-      <button class="mc-back" type="button" @click="emit('back')">← 返回首页</button>
+      <button class="mc-back" type="button" @click="emit('back')">← 返回上一页</button>
       <div class="mc-brand">💎 森林会员中心</div>
       <!-- 已登录：积分跟账号走，无需输入手机号 -->
       <div v-if="loggedIn" class="mc-account">

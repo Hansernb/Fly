@@ -2,7 +2,7 @@
   <div class="booking">
     <!-- 顶部栏：返回 + 标题 + 我的订单切换 -->
     <header class="bk-bar">
-      <button class="bk-back" type="button" @click="$emit('back')">‹ 返回</button>
+      <button class="bk-back" type="button" @click="$emit('back')">‹ 返回上一页</button>
       <h1 class="bk-title">🎫 狗熊岭在线订票</h1>
       <button class="bk-orders-btn" type="button" @click="goOrders">
         🧾 我的订单

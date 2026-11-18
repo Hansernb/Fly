@@ -61,7 +61,7 @@
         </button>
       </form>
 
-      <button class="al-back" type="button" @click="$emit('back')">← 返回游乐园首页</button>
+      <button class="al-back" type="button" @click="$emit('back')">← 返回上一页</button>
     </div>
   </div>
 </template>

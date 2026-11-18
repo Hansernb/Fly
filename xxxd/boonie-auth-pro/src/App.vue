@@ -141,6 +141,8 @@ const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attrac
 function go(path, viewName) {
   if (location.pathname !== path) {
     history.pushState({ view: viewName }, '', path)
+    // 标记本次会话发生过站内跳转：刷新后仍保留，用于「返回上一页」判断
+    try { sessionStorage.setItem('boonie_nav', '1') } catch {}
   }
   view.value = viewName
 }
@@ -181,7 +183,17 @@ function onPopState() {
   view.value = v
 }
 
+/**
+ * 各板块「返回」按钮：优先浏览器后退，回到上一个页面（如 游乐项目 → 首页）；
+ * 只有在没有任何站内历史可退时（如新标签直达子页），才兜底回首页。
+ */
 function goHome() {
+  let hasNav = false
+  try { hasNav = sessionStorage.getItem('boonie_nav') === '1' } catch {}
+  if (hasNav && window.history.length > 1 && window.history.state && window.history.state.view) {
+    window.history.back()
+    return
+  }
   go('/', 'home')
 }
 
