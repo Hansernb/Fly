@@ -10,15 +10,17 @@
       <div class="nav-inner">
         <div class="logo">🌲 狗熊岭森林游乐园</div>
 
-        <!-- 导航菜单（宽屏） -->
-        <nav class="nav-menu" aria-label="主导航">
+        <!-- 导航菜单（宽屏）：内容靠左，溢出可横向滑动 -->
+        <nav class="nav-menu" aria-label="主导航" @wheel.prevent="onNavWheel">
           <a
             v-for="m in menus"
             :key="m.id"
-            href="javascript:void(0)"
+            :href="m.href || 'javascript:void(0)'"
+            :target="m.href ? '_blank' : undefined"
+            :rel="m.href ? 'noopener noreferrer' : undefined"
             class="nav-link"
-            :class="{ active: activeMenu === m.id }"
-            @click="goSection(m.id)"
+            :class="{ active: activeMenu === m.id, ext: m.external }"
+            @click="!m.href && goSection(m.id)"
             >{{ m.icon }} {{ m.label }}</a
           >
         </nav>
@@ -47,6 +49,9 @@
         </button>
 
         <div class="nav-user">
+          <button class="member-pill" type="button" title="我的订单 · 收藏 · 积分 · 徽章" @click="$emit('profile')">
+            👤 个人中心
+          </button>
           <button class="member-pill" type="button" title="森林会员中心" @click="$emit('member')">
             💎 会员中心
           </button>
@@ -72,10 +77,12 @@
           <a
             v-for="m in menus"
             :key="m.id"
-            href="javascript:void(0)"
+            :href="m.href || 'javascript:void(0)'"
+            :target="m.href ? '_blank' : undefined"
+            :rel="m.href ? 'noopener noreferrer' : undefined"
             class="drawer-link"
-            :class="{ active: activeMenu === m.id }"
-            @click="goSection(m.id)"
+            :class="{ active: activeMenu === m.id, ext: m.external }"
+            @click="!m.href && (menuOpen = false, goSection(m.id))"
             >{{ m.icon }} {{ m.label }}</a
           >
           <a
@@ -87,6 +94,23 @@
         </nav>
       </transition>
     </header>
+
+    <!-- 顶部公告栏：滚动播报，可关闭 -->
+    <transition name="fade">
+      <div v-if="noticeOpen" class="notice-bar">
+        <span class="notice-ico">📢 公告</span>
+        <div class="notice-track">
+          <div class="notice-run">
+            <span v-for="n in 2" :key="n" class="notice-run-seg">
+              <b>🕘 开园时间</b>：09:00 - 21:00（20:30 停止入园）&nbsp;&nbsp;┃&nbsp;&nbsp;
+              <b>☀️ 今日天气</b>：晴 12~22°C，紫外线偏强，请注意防晒&nbsp;&nbsp;┃&nbsp;&nbsp;
+              <b>📌 临时通知</b>：「树洞过山车」11月23日例行检修，暂停开放一天，敬请谅解&nbsp;&nbsp;┃&nbsp;&nbsp;
+            </span>
+          </div>
+        </div>
+        <button class="notice-close" type="button" aria-label="关闭公告" @click="noticeOpen = false">✕</button>
+      </div>
+    </transition>
 
     <!-- 头像设置弹层：普通用户可在这里更换自己的头像 -->
     <transition name="avatar-pop">
@@ -154,6 +178,8 @@
               type="text"
               placeholder="搜索游乐项目、栖息地、演出、门票…"
               @keyup.enter="runSearch"
+              @focus="searchFocused = true"
+              @blur="searchFocused = false"
             />
             <button
               v-if="query"
@@ -164,6 +190,43 @@
             >
               ✕
             </button>
+
+            <!-- 关键词联想 / 搜索历史下拉 -->
+            <transition name="drop">
+              <div v-if="showSearchPanel" class="search-panel">
+                <template v-if="query.trim()">
+                  <button
+                    v-for="s in suggestions"
+                    :key="s.key"
+                    type="button"
+                    class="sp-item"
+                    @mousedown.prevent="pickSuggestion(s)"
+                  >
+                    <span class="sp-ico">{{ s.icon }}</span>
+                    <span class="sp-text">{{ s.text }}</span>
+                    <span class="sp-type">{{ s.type }}</span>
+                  </button>
+                  <div v-if="!suggestions.length" class="sp-empty">
+                    🤔 没有相关联想，按回车直接搜索「{{ query }}」
+                  </div>
+                </template>
+                <template v-else-if="searchHistory.length">
+                  <div class="sp-head">
+                    🕘 搜索历史
+                    <button class="sp-clear" type="button" @mousedown.prevent="clearHistory">清空</button>
+                  </div>
+                  <div class="sp-history">
+                    <button
+                      v-for="h in searchHistory"
+                      :key="h"
+                      type="button"
+                      class="sp-hist"
+                      @mousedown.prevent="pickHistory(h)"
+                    >🕐 {{ h }}</button>
+                  </div>
+                </template>
+              </div>
+            </transition>
           </div>
           <button class="search-btn" type="button" @click="runSearch">🐾 搜索</button>
         </div>
@@ -272,6 +335,41 @@
       </div>
     </section>
 
+    <!-- 热门项目推荐卡片墙 -->
+    <section v-if="!searching" id="hot" class="section reveal">
+      <div class="section-head">
+        <h2 class="section-title">🔥 热门项目推荐</h2>
+        <button class="see-all" type="button" @click="goSection('attractions')">全部项目 ›</button>
+      </div>
+      <div class="hot-wall">
+        <article
+          v-for="a in hotAttractions"
+          :key="a.id"
+          class="hot-card"
+          :style="{ '--accent': a.color }"
+          @click="openDetail(a)"
+        >
+          <div class="hot-cover">
+            <img :src="a.img || FALLBACK_IMG" :alt="a.name" loading="lazy" />
+            <span class="hot-tag">{{ a.tag }}</span>
+          </div>
+          <div class="hot-body">
+            <h3 class="hot-name">{{ a.emoji }} {{ a.name }}</h3>
+            <div class="hot-meta">
+              <StarRating :score="a.rating" :size="14" />
+              <span class="hot-score">{{ Number(a.rating || 0).toFixed(1) }}</span>
+              <button class="hot-more" type="button" @click.stop="openDetail(a)">查看详情 ›</button>
+            </div>
+            <div class="card-acts">
+              <button class="act" :class="{ on: isFav(a) }" type="button" :title="isFav(a) ? '取消收藏' : '收藏'" @click.stop="toggleFavorite(a)">{{ isFav(a) ? '❤️' : '🤍' }}</button>
+              <button class="act" :class="{ on: isLiked(a), liked: isLiked(a) }" type="button" :title="isLiked(a) ? '取消点赞' : '点赞'" @click.stop="toggleLike(a)">👍 {{ likeCount(a) }}</button>
+              <button class="act" type="button" title="分享" @click.stop="shareCard(a)">🔗 分享</button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <!-- 数据库告警 / 搜索结果提示 -->
     <div v-if="apiError" class="db-warn">⚠️ {{ apiError }}</div>
     <div v-if="query" class="result-tip">
@@ -286,8 +384,21 @@
         <span class="sr-count">共 {{ totalResults }} 条</span>
       </div>
 
-      <div v-if="!totalResults" class="empty">
-        🍃 没有找到“{{ query }}”相关内容，换个关键词试试？比如「过山车」「摩天轮」「夜场票」
+      <div v-if="!totalResults" class="no-result">
+        <div class="nr-emoji">🦉</div>
+        <h3 class="nr-title">未找到相关内容</h3>
+        <p class="nr-desc">没有找到与「{{ query }}」相关的游乐项目、演出或门票，换个关键词试试？</p>
+        <div class="nr-tips">
+          <span class="nr-tip-label">大家都在搜：</span>
+          <button
+            v-for="t in hotKeywords"
+            :key="t"
+            type="button"
+            class="nr-kw"
+            @click="pickHistory(t)"
+          >{{ t }}</button>
+        </div>
+        <button class="nr-clear" type="button" @click="clearSearch">清除搜索，回到首页</button>
       </div>
 
       <template v-else>
@@ -319,7 +430,12 @@
                     <span class="rate-num">{{ Number(a.rating || 0).toFixed(1) }}</span>
                   </div>
                 </div>
-                <button class="ride-more" type="button" @click.stop="openDetail(a)">查看详情 ›</button>
+                <div class="card-acts">
+                  <button class="act" :class="{ on: isFav(a) }" type="button" :title="isFav(a) ? '取消收藏' : '收藏'" @click.stop="toggleFavorite(a)">{{ isFav(a) ? '❤️' : '🤍' }}</button>
+                  <button class="act" :class="{ on: isLiked(a), liked: isLiked(a) }" type="button" :title="isLiked(a) ? '取消点赞' : '点赞'" @click.stop="toggleLike(a)">👍 {{ likeCount(a) }}</button>
+                  <button class="act" type="button" title="分享" @click.stop="shareCard(a)">🔗 分享</button>
+                  <button class="ride-more" type="button" @click.stop="openDetail(a)">查看详情 ›</button>
+                </div>
               </div>
             </article>
           </div>
@@ -404,18 +520,23 @@
           <div class="ride-body">
             <h3>{{ a.name }}</h3>
             <p>{{ a.desc }}</p>
-            <div class="ride-meta">
-              <span class="wait" :class="'w' + waitLevel(a.wait)">⏱ 排队约 {{ a.wait }} 分钟</span>
-              <div class="ride-rate">
-                <StarRating :score="a.rating" :size="15" />
-                <span class="rate-num">{{ Number(a.rating || 0).toFixed(1) }}</span>
+                <div class="ride-meta">
+                  <span class="wait" :class="'w' + waitLevel(a.wait)">⏱ 排队约 {{ a.wait }} 分钟</span>
+                  <div class="ride-rate">
+                    <StarRating :score="a.rating" :size="15" />
+                    <span class="rate-num">{{ Number(a.rating || 0).toFixed(1) }}</span>
+                  </div>
+                </div>
+                <div class="card-acts">
+                  <button class="act" :class="{ on: isFav(a) }" type="button" :title="isFav(a) ? '取消收藏' : '收藏'" @click.stop="toggleFavorite(a)">{{ isFav(a) ? '❤️' : '🤍' }}</button>
+                  <button class="act" :class="{ on: isLiked(a), liked: isLiked(a) }" type="button" :title="isLiked(a) ? '取消点赞' : '点赞'" @click.stop="toggleLike(a)">👍 {{ likeCount(a) }}</button>
+                  <button class="act" type="button" title="分享" @click.stop="shareCard(a)">🔗 分享</button>
+                  <button class="ride-more" type="button" @click.stop="openDetail(a)">查看详情 ›</button>
+                </div>
               </div>
-            </div>
-            <button class="ride-more" type="button" @click.stop="openDetail(a)">查看详情 ›</button>
+            </article>
           </div>
-        </article>
-      </div>
-      <div v-else class="empty">🍃 没有匹配的游乐项目，换个关键词试试？</div>
+          <div v-else class="empty">🍃 没有匹配的游乐项目，换个关键词试试？</div>
     </section>
 
     <!-- 森林栖息地 -->
@@ -674,6 +795,13 @@
       <transition name="modal">
         <div v-if="detail" class="modal-mask" @click.self="closeDetail">
           <div class="modal" :style="{ '--accent': detail.color }">
+            <button
+              class="modal-fav"
+              :class="{ on: isFav(detail) }"
+              type="button"
+              :title="isFav(detail) ? '取消收藏' : '收藏项目'"
+              @click="toggleFavorite(detail)"
+            >{{ isFav(detail) ? '❤️' : '🤍' }}</button>
             <button class="modal-close" type="button" aria-label="关闭" @click="closeDetail">✕</button>
 
             <div class="modal-hero">
@@ -699,7 +827,7 @@
             <div class="modal-section-title">🗣️ 项目评价（{{ detail.reviews.length }}）</div>
             <div class="modal-reviews">
               <article v-for="r in detail.reviews" :key="r.id" class="m-review">
-                <div class="m-avatar"><img :src="avatarSrc(r)" alt="头像" loading="lazy" /></div>
+                <div class="m-avatar"><img :src="avatarSrc(r)" alt="头像" loading="lazy" @error="onAvatarError" /></div>
                 <div class="m-body">
                   <div class="m-head">
                     <span class="m-name">{{ r.name }}</span>
@@ -741,6 +869,11 @@
         <div v-if="toast" class="toast">{{ toast }}</div>
       </transition>
     </Teleport>
+
+    <!-- 回到顶部：下滑超过一屏后出现 -->
+    <transition name="fade">
+      <button v-if="showTop" class="back-top" type="button" aria-label="回到顶部" title="回到顶部" @click="scrollTop">🎈</button>
+    </transition>
   </div>
 </template>
 
@@ -757,7 +890,7 @@ const props = defineProps({
   user: { type: Object, required: true },
   token: { type: String, required: true }
 })
-const emit = defineEmits(['logout', 'admin', 'attractions', 'tickets', 'games', 'member'])
+const emit = defineEmits(['logout', 'admin', 'attractions', 'tickets', 'games', 'member', 'profile'])
 
 /* 仅管理员（permission === 0）才显示「后台管理系统」入口 */
 const isAdmin = computed(() => Number(props.user?.permission) === 0)
@@ -789,12 +922,35 @@ const AVATAR_IMG = {
 function avatarSrc(r) {
   const a = r && (r.avatarImg || r.avatar)
   if (typeof a === 'string' && a.startsWith('/')) return a
-  return AVATAR_IMG[a] || ''
+  // 没有图片头像时，按名字生成字母头像（名字哈希定色 + 首字）
+  return AVATAR_IMG[a] || nameAvatar(r && r.name)
+}
+
+/** 根据名字生成 SVG 字母头像（同名恒定同色） */
+const AVATAR_COLORS = ['#e4572e', '#2a9d8f', '#4a90d9', '#7c5cbf', '#e9a13b', '#3f7d3f', '#d35d6e', '#2f7dd1']
+function nameAvatar(name) {
+  const n = String(name || '').trim() || '游'
+  let hash = 0
+  for (const ch of n) hash = (hash * 31 + ch.codePointAt(0)) >>> 0
+  const color = AVATAR_COLORS[hash % AVATAR_COLORS.length]
+  const char = [...n][0].toUpperCase()
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+    `<rect width="64" height="64" rx="32" fill="${color}"/>` +
+    `<text x="32" y="42" font-size="28" font-family="sans-serif" font-weight="bold" fill="#fff" text-anchor="middle">${char}</text>` +
+    `</svg>`
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
 }
 
 /** 头像是否为图片（有路径或命中 emoji 映射图） */
 function avatarIsImg(r) {
   return !!avatarSrc(r)
+}
+
+/** 头像图加载失败时回退为默认头像 */
+function onAvatarError(e) {
+  if (e.target.src.includes(DEFAULT_AVATAR)) return
+  e.target.src = DEFAULT_AVATAR
 }
 
 /** 无映射图时渲染的 emoji 头像（后端按名字生成，或兜底 🐻） */
@@ -805,6 +961,14 @@ function avatarEmoji(r) {
 
 /* ===================== 数据：从数据库（Spring Boot + MySQL）加载 ===================== */
 const attractions = ref([])
+
+/* 顶部公告栏开关 */
+const noticeOpen = ref(true)
+
+/* 热门项目推荐：按评分取前 5 个 */
+const hotAttractions = computed(() =>
+  [...attractions.value].sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 5)
+)
 const loading = ref(false)
 const apiError = ref('')
 const loadedFromApi = ref(false)
@@ -950,11 +1114,106 @@ function openDetail(a) {
   detail.value = a
   detailForm.rating = 0
   detailForm.text = ''
+  recordView(a)
   document.body.style.overflow = 'hidden'
   nextTick(() => {
     const el = document.getElementById('detailReviewText')
     if (el) el.focus()
   })
+}
+
+/* ---------- 我的收藏 + 浏览历史（个人中心数据源） ---------- */
+const LS_FAV = 'boonie_favorites_v1'
+const LS_VIEW = 'boonie_view_history_v1'
+const favorites = ref(loadList(LS_FAV))
+const viewHistory = ref(loadList(LS_VIEW))
+
+function loadList(key) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(key) || '[]')
+    return Array.isArray(arr) ? arr : []
+  } catch {
+    return []
+  }
+}
+function saveList(key, list) {
+  try {
+    localStorage.setItem(key, JSON.stringify(list))
+  } catch {
+    /* ignore */
+  }
+}
+function favSnapshot(a) {
+  return { id: a.id, emoji: a.emoji, name: a.name, img: a.img || '', tag: a.tag, rating: a.rating, price: a.price || 0 }
+}
+function isFav(a) {
+  return favorites.value.some((f) => f.id === a.id)
+}
+function toggleFavorite(a) {
+  if (isFav(a)) {
+    favorites.value = favorites.value.filter((f) => f.id !== a.id)
+    showToast('已取消收藏「' + a.name + '」')
+  } else {
+    favorites.value = [favSnapshot(a), ...favorites.value].slice(0, 50)
+    showToast('❤️ 已收藏「' + a.name + '」，可在个人中心查看')
+  }
+  saveList(LS_FAV, favorites.value)
+}
+function recordView(a) {
+  const item = {
+    ...favSnapshot(a),
+    time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+  viewHistory.value = [item, ...viewHistory.value.filter((v) => v.id !== a.id)].slice(0, 20)
+  saveList(LS_VIEW, viewHistory.value)
+}
+
+/* ---------- 卡片点赞 + 分享（localStorage 持久化） ---------- */
+const LS_LIKE = 'boonie_likes_v1'
+const likes = ref(loadList(LS_LIKE))
+function isLiked(a) {
+  return likes.value.includes(a.id)
+}
+/** 基础点赞数：按项目 id 稳定生成，同一项目每次显示一致 */
+function baseLikes(a) {
+  return 40 + ((Number(a.id) || 0) * 37) % 60
+}
+function likeCount(a) {
+  return baseLikes(a) + (isLiked(a) ? 1 : 0)
+}
+function toggleLike(a) {
+  if (isLiked(a)) {
+    likes.value = likes.value.filter((id) => id !== a.id)
+    showToast('已取消点赞「' + a.name + '」')
+  } else {
+    likes.value = [...likes.value, a.id]
+    showToast('👍 已点赞「' + a.name + '」')
+  }
+  saveList(LS_LIKE, likes.value)
+}
+/** 分享：优先调起系统分享，否则复制链接到剪贴板 */
+async function shareCard(a) {
+  const url = location.origin + '/#project-' + a.id
+  const text = '「狗熊岭森林游乐园」推荐项目：' + a.name
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: a.name, text, url })
+      return
+    }
+    await navigator.clipboard.writeText(text + ' ' + url)
+    showToast('🔗 分享链接已复制，快去发给朋友吧！')
+  } catch {
+    showToast('分享已取消')
+  }
+}
+
+/* ---------- 回到顶部 ---------- */
+const showTop = ref(false)
+function onWinScroll() {
+  showTop.value = window.scrollY > 400
+}
+function scrollTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 function closeDetail() {
   detail.value = null
@@ -979,6 +1238,11 @@ async function submitDetailReview() {
     recalc(detail.value)
     detailForm.rating = 0
     detailForm.text = ''
+    try {
+      localStorage.setItem('boonie_review_count_v1', String(Number(localStorage.getItem('boonie_review_count_v1') || 0) + 1))
+    } catch {
+      /* ignore */
+    }
     showToast('🐾 评价发布成功！')
   } catch (e) {
     showToast('😢 评价发布失败，请稍后再试')
@@ -1007,6 +1271,12 @@ const defaultAvatars = [
 ]
 // 当前生效的头像：优先用「本地已保存的」，其次 props.user.avatar，最后默认图
 const localAvatar = ref('')
+
+/** 导航菜单溢出时：鼠标滚轮直接横向滑动（无需按 Shift） */
+function onNavWheel(e) {
+  const el = e.currentTarget
+  if (el && el.scrollWidth > el.clientWidth) el.scrollLeft += e.deltaY
+}
 const myAvatar = computed(() => localAvatar.value || props.user?.avatar || DEFAULT_AVATAR)
 
 const avatarPanelOpen = ref(false)
@@ -1164,12 +1434,24 @@ onMounted(async () => {
   loadScenery()
   startBanner()
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('scroll', onWinScroll, { passive: true })
+  onWinScroll()
+  // 个人中心 → 打开对应项目详情
+  window.addEventListener('boonie_open_attraction', onOpenAttractionEvent)
 })
+
+function onOpenAttractionEvent(e) {
+  const id = e.detail?.id
+  const a = attractions.value.find((x) => x.id === Number(id))
+  if (a) openDetail(a)
+}
 
 onBeforeUnmount(() => {
   if (spyObserver) spyObserver.disconnect()
   if (revealObserver) revealObserver.disconnect()
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', onWinScroll)
+  window.removeEventListener('boonie_open_attraction', onOpenAttractionEvent)
   clearTimeout(toastTimer)
   stopBanner()
   document.body.style.overflow = ''
@@ -1232,7 +1514,9 @@ const menus = [
   { id: 'games', label: '小游戏', icon: '🎮' },
   { id: 'tickets', label: '门票', icon: '🎫' },
   { id: 'scenery', label: '风景', icon: '📷' },
-  { id: 'reviews', label: '评价', icon: '🗣️' }
+  { id: 'reviews', label: '评价', icon: '🗣️' },
+  // 外链：CCTV 动画频道（新标签页打开）
+  { id: 'cctv', label: '影视工厂', icon: '📺', href: 'https://tv.cctv.com/yxg/index.shtml', external: true }
 ]
 const activeMenu = ref('attractions')
 const menuOpen = ref(false)
@@ -1375,8 +1659,99 @@ const totalResults = computed(
 /** 是否处于搜索态：有输入时整页只保留搜索结果，其余板块全部隐藏 */
 const searching = computed(() => !!query.value.trim())
 
+/* ============ 搜索增强：联想下拉 + 历史记录（本地存储） ============ */
+const LS_SEARCH_HISTORY = 'boonie_search_history'
+const searchFocused = ref(false)
+const searchHistory = ref(loadSearchHistory())
+const hotKeywords = ['过山车', '摩天轮', '烟花', '蜂蜜', '夜场票']
+
+function loadSearchHistory() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(LS_SEARCH_HISTORY) || '[]')
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveSearchHistory(kw) {
+  const next = [kw, ...searchHistory.value.filter((h) => h !== kw)].slice(0, 8)
+  searchHistory.value = next
+  try {
+    localStorage.setItem(LS_SEARCH_HISTORY, JSON.stringify(next))
+  } catch {
+    /* 存储失败不影响搜索 */
+  }
+}
+
+function clearHistory() {
+  searchHistory.value = []
+  try {
+    localStorage.removeItem(LS_SEARCH_HISTORY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function pickHistory(kw) {
+  searchFocused.value = false
+  query.value = kw
+  runSearch()
+}
+
+/* 联想候选：项目名 / 演出名 / 栖息地 / 门票名 */
+const suggestions = computed(() => {
+  const q = query.value.trim()
+  if (!q) return []
+  const out = []
+  let n = 0
+  for (const a of attractions.value) {
+    if (match(a.name) || match(a.tag)) {
+      out.push({ key: 'a' + a.id, icon: a.emoji, text: a.name, type: '游乐项目', kind: 'attraction', data: a })
+      if (++n >= 6) return out
+    }
+  }
+  for (const s of shows) {
+    if (match(s.name) || match(s.place)) {
+      out.push({ key: 's' + s.time + s.name, icon: s.emoji, text: s.name, type: '演出', kind: 'keyword' })
+      if (++n >= 6) return out
+    }
+  }
+  for (const h of habitats) {
+    if (match(h.name) || match(h.residents)) {
+      out.push({ key: 'h' + h.name, icon: h.emoji, text: h.name, type: '栖息地', kind: 'keyword' })
+      if (++n >= 6) return out
+    }
+  }
+  for (const t of tickets) {
+    if (match(t.name)) {
+      out.push({ key: 't' + t.id, icon: t.emoji, text: t.name, type: '门票', kind: 'keyword' })
+      if (++n >= 6) return out
+    }
+  }
+  return out
+})
+
+/* 输入框聚焦时展示：有输入 → 联想；无输入 → 历史 */
+const showSearchPanel = computed(
+  () => searchFocused.value && (query.value.trim() ? true : searchHistory.value.length > 0)
+)
+
+function pickSuggestion(s) {
+  searchFocused.value = false
+  if (s.kind === 'attraction') {
+    // 直接打开项目详情弹窗
+    openDetail(s.data)
+  } else {
+    query.value = s.text
+    runSearch()
+  }
+}
+
 function runSearch() {
-  if (!query.value.trim()) return
+  const kw = query.value.trim()
+  if (!kw) return
+  saveSearchHistory(kw)
   activeMenu.value = 'attractions'
   nextTick(() => {
     const el = document.getElementById('search-results')
@@ -1508,6 +1883,9 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   position: sticky;
   top: 0;
   z-index: 30;
+  /* 突破 .park 的 1280px 限宽，让白色背景铺满整个视口宽度 */
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
   background: rgba(255, 248, 236, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 2px solid var(--wood-light);
@@ -1517,6 +1895,8 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   align-items: center;
   gap: 18px;
   padding: 12px 24px;
+  /* 内容靠左对齐，菜单溢出时可在右侧滑动查看 */
+  min-width: 0;
 }
 .logo {
   font-size: 18px;
@@ -1529,6 +1909,16 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   align-items: center;
   gap: 6px;
   flex: 1;
+  /* 菜单项过多时横向滑动，隐藏滚动条但可用滚轮/触摸拖动 */
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+.nav-menu::-webkit-scrollbar {
+  display: none;
 }
 .nav-link {
   border: 2px solid transparent;
@@ -1541,12 +1931,23 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  flex: 0 0 auto;
   transition: all 0.15s ease;
 }
 .nav-link:hover {
   color: var(--forest-deep);
   background: rgba(47, 125, 79, 0.1);
   border-color: var(--leaf);
+}
+/* 外链菜单项：hover 黄色高亮；所有导航项点击按压缩放回弹 */
+.nav-link.ext:hover {
+  color: #8a5200;
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffc83d 100%);
+  border-color: var(--honey);
+  box-shadow: 0 3px 0 #e09b00;
+}
+.nav-link:active {
+  transform: scale(0.92);
 }
 .nav-link.active {
   color: #5a3d00;
@@ -1624,6 +2025,13 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
 .drawer-link:hover {
   background: rgba(47, 125, 79, 0.1);
   color: var(--forest-deep);
+}
+.drawer-link.ext:hover {
+  background: linear-gradient(180deg, #ffe9a8 0%, #ffc83d 100%);
+  color: #8a5200;
+}
+.drawer-link:active {
+  transform: scale(0.95);
 }
 .drawer-link.active {
   color: #5a3d00;
@@ -2624,13 +3032,14 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   transform: translateY(1px);
 }
 .scenery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  /* 瀑布流：CSS 多列布局，卡片按原始高度自然错落 */
+  columns: 4 240px;
+  column-gap: 16px;
 }
 .scenery-card {
   position: relative;
-  margin: 0;
+  margin: 0 0 16px;
+  break-inside: avoid;
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: 0 8px 22px rgba(47, 125, 79, 0.12);
@@ -2644,7 +3053,8 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
 }
 .scenery-card img {
   width: 100%;
-  height: 200px;
+  height: auto;
+  min-height: 140px;
   object-fit: cover;
   display: block;
   transition: transform 0.4s ease;
@@ -3662,13 +4072,31 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   height: 36px;
   border: 2px solid var(--wood-light);
   background: #fff;
-  border-radius: 50%;
-  font-size: 15px;
+  border-radius: 50%;  font-size: 15px;
   color: var(--muted);
   cursor: pointer;
   transition: all 0.15s ease;
   z-index: 2;
 }
+/* 详情弹窗收藏按钮（关闭按钮左侧） */
+.modal-fav {
+  position: absolute;
+  top: 14px;
+  right: 60px;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--wood-light);
+  background: #fff;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+  z-index: 2;
+}
+.modal-fav:hover { box-shadow: 0 4px 12px rgba(228, 87, 46, 0.3); }
+.modal-fav:active { transform: scale(0.85); }
+.modal-fav.on { border-color: #ff7d94; background: #fff2f4; }
 .modal-close:hover {
   background: var(--danger);
   border-color: var(--danger);
@@ -4137,5 +4565,430 @@ const treeLine = Array.from({ length: 14 }, (_, i) => ({
   .banner-caption h3 { font-size: 22px; }
   .banner-caption p { font-size: 13px; }
   .data-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ===================== 顶部公告栏 ===================== */
+.notice-bar {
+  position: sticky;
+  top: 60px;
+  z-index: 29;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(90deg, #fff7df, #fffdf5);
+  border-bottom: 2px solid var(--wood-light);
+  overflow: hidden;
+}
+.notice-ico {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 900;
+  color: #8a5200;
+  white-space: nowrap;
+}
+.notice-track {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.notice-run {
+  display: inline-flex;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #6b5200;
+  animation: notice-scroll 26s linear infinite;
+}
+.notice-run-seg {
+  padding-right: 60px;
+}
+.notice-run b {
+  color: #b06000;
+}
+@keyframes notice-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.notice-close {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(176, 96, 0, 0.12);
+  color: #8a5200;
+  font-size: 12px;
+  line-height: 24px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.notice-close:hover {
+  background: rgba(176, 96, 0, 0.22);
+  transform: scale(1.08);
+}
+.notice-close:active { transform: scale(0.9); }
+
+/* ===================== 热门项目推荐卡片墙 ===================== */
+.hot-wall {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 236px;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 4px 4px 14px;
+  scroll-snap-type: x proximity;
+}
+.hot-wall::-webkit-scrollbar { height: 8px; }
+.hot-wall::-webkit-scrollbar-thumb {
+  background: #cfe3c6;
+  border-radius: 8px;
+}
+.hot-card {
+  scroll-snap-align: start;
+  background: #fff;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 2px solid transparent;
+  box-shadow: 0 8px 22px rgba(47, 125, 79, 0.12);
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.hot-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 36px rgba(47, 125, 79, 0.22);
+  border-color: var(--accent, var(--leaf));
+}
+.hot-card:active { transform: scale(0.97); }
+.hot-cover {
+  position: relative;
+  height: 140px;
+  overflow: hidden;
+}
+.hot-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+.hot-card:hover .hot-cover img { transform: scale(1.08); }
+.hot-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--accent, var(--forest));
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.hot-body {
+  padding: 12px 14px 14px;
+}
+.hot-name {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--forest-deep);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hot-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hot-score {
+  font-size: 13px;
+  font-weight: 900;
+  color: #e09b00;
+}
+.hot-more {
+  margin-left: auto;
+  border: none;
+  background: rgba(47, 125, 79, 0.1);
+  color: var(--forest-deep);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.hot-more:hover {
+  background: rgba(255, 183, 3, 0.35);
+}
+.hot-more:active { transform: scale(0.94); }
+.see-all {
+  border: none;
+  background: transparent;
+  color: var(--forest);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.see-all:hover { background: rgba(47, 125, 79, 0.1); }
+.see-all:active { transform: scale(0.95); }
+
+@media (max-width: 720px) {
+  .hot-wall { grid-auto-columns: 200px; }
+  .notice-bar { top: 56px; }
+}
+
+/* ===================== 搜索联想下拉 + 搜索历史 ===================== */
+.search-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(30, 70, 45, 0.18);
+  border: 1.5px solid var(--wood-light);
+  padding: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.drop-enter-active,
+.drop-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.drop-enter-from,
+.drop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.sp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.sp-item:hover {
+  background: rgba(47, 125, 79, 0.08);
+}
+.sp-ico {
+  font-size: 18px;
+  flex: 0 0 22px;
+}
+.sp-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-type {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--forest);
+  background: rgba(47, 125, 79, 0.1);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.sp-empty {
+  padding: 14px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.sp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  padding: 4px 12px 8px;
+}
+.sp-clear {
+  border: none;
+  background: transparent;
+  color: #c74a1e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.sp-clear:hover { text-decoration: underline; }
+.sp-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 8px 6px;
+}
+.sp-hist {
+  border: 1.5px solid var(--wood-light);
+  background: #fafdf8;
+  color: var(--text);
+  font-size: 12.5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.sp-hist:hover {
+  border-color: var(--forest);
+  background: rgba(47, 125, 79, 0.08);
+}
+.sp-hist:active { transform: scale(0.94); }
+
+/* ===================== 搜索无结果提示页 ===================== */
+.no-result {
+  text-align: center;
+  padding: 70px 24px;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 26px rgba(47, 125, 79, 0.08);
+}
+.nr-emoji {
+  font-size: 64px;
+  margin-bottom: 12px;
+  animation: nr-bob 2.2s ease-in-out infinite;
+}
+@keyframes nr-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.nr-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--forest-deep);
+}
+.nr-desc {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.nr-tips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.nr-tip-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.nr-kw {
+  border: 1.5px solid var(--wood-light);
+  background: #fafdf8;
+  color: var(--forest-deep);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nr-kw:hover {
+  border-color: var(--forest);
+  background: rgba(47, 125, 79, 0.08);
+}
+.nr-kw:active { transform: scale(0.94); }
+.nr-clear {
+  border: none;
+  background: var(--forest);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 9px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.nr-clear:hover {
+  box-shadow: 0 6px 16px rgba(47, 125, 79, 0.3);
+}
+.nr-clear:active { transform: scale(0.94); }
+
+/* ===================== 卡片操作条：收藏 / 点赞 / 分享 ===================== */
+.card-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.act {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1.5px solid var(--wood-light);
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.act:hover {
+  color: var(--forest-deep);
+  border-color: var(--leaf);
+  background: rgba(47, 125, 79, 0.08);
+  transform: translateY(-2px);
+}
+.act:active { transform: scale(0.9); }
+.act.on {
+  color: #c0392b;
+  border-color: #f5a9a0;
+  background: #fdeeea;
+}
+/* 点赞按钮的激活态用森林绿（区别于收藏的红色） */
+.act.liked {
+  color: var(--forest-deep);
+  border-color: var(--leaf);
+  background: #eaf4e4;
+}
+/* 操作条内的「查看详情」按钮补一个左侧间距 */
+.card-acts .ride-more { margin-left: auto; }
+
+/* ===================== 回到顶部 ===================== */
+.back-top {
+  position: fixed;
+  right: 22px;
+  bottom: 26px;
+  z-index: 60;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--leaf);
+  background: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(47, 125, 79, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.back-top:hover {
+  transform: translateY(-4px) scale(1.06);
+  box-shadow: 0 10px 24px rgba(47, 125, 79, 0.36);
+}
+.back-top:active { transform: scale(0.9); }
+@media (max-width: 640px) {
+  .back-top { right: 14px; bottom: 16px; width: 42px; height: 42px; font-size: 19px; }
 }
 </style>

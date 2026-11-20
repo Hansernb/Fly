@@ -19,8 +19,50 @@
       >{{ c }}</button>
     </div>
 
+    <!-- 身高限制 / 排队时长筛选 + 价格排序 -->
+    <div class="filter-bar">
+      <div class="filter-row">
+        <span class="f-label">📏 身高限制</span>
+        <button
+          v-for="h in heightOptions"
+          :key="'h' + h.value"
+          type="button"
+          class="f-chip"
+          :class="{ on: heightSel === h.value }"
+          @click="heightSel = h.value"
+        >{{ h.label }}</button>
+      </div>
+      <div class="filter-row">
+        <span class="f-label">⏱ 排队时长</span>
+        <button
+          v-for="w in waitOptions"
+          :key="'w' + w.value"
+          type="button"
+          class="f-chip"
+          :class="{ on: waitSel === w.value }"
+          @click="waitSel = w.value"
+        >{{ w.label }}</button>
+      </div>
+      <div class="filter-row">
+        <span class="f-label">↕️ 排序方式</span>
+        <select v-model="sortBy" class="f-select">
+          <option value="default">默认（推荐）</option>
+          <option value="price-asc">价格从低到高</option>
+          <option value="price-desc">价格从高到低</option>
+          <option value="rating-desc">评分从高到低</option>
+        </select>
+        <span class="f-count">共 {{ filtered.length }} 个项目</span>
+        <button
+          v-if="heightSel > 0 || waitSel !== 'all' || sortBy !== 'default'"
+          class="f-reset"
+          type="button"
+          @click="resetFilters"
+        >重置筛选</button>
+      </div>
+    </div>
+
     <!-- 卡片网格 -->
-    <div class="attr-grid">
+    <div v-if="filtered.length" class="attr-grid">
       <article
         v-for="a in filtered"
         :key="a.id"
@@ -33,6 +75,7 @@
         <div class="cover" :style="{ background: a.color }">
           <img :src="a.img" :alt="a.name" loading="lazy" />
           <span class="badge" :class="catClass(a.category)">{{ a.category }}</span>
+          <span class="price-tag">¥{{ a.price || 0 }}</span>
         </div>
         <div class="body">
           <h3>{{ a.emoji }} {{ a.name }}</h3>
@@ -40,9 +83,17 @@
             <span class="meta-item">📏 身高 {{ a.height }}</span>
             <span class="meta-item">⏱ 排队 {{ a.wait }} 分钟</span>
           </div>
-          <div class="rate">★ {{ a.rating.toFixed(1) }}</div>
+          <div class="rate-row">
+            <span class="rate">★ {{ a.rating.toFixed(1) }}</span>
+            <span class="price">💰 ¥{{ a.price || 0 }}</span>
+          </div>
         </div>
       </article>
+    </div>
+    <div v-else class="attr-empty">
+      <div class="attr-empty-emoji">🍃</div>
+      <p>没有符合筛选条件的项目，换个条件试试～</p>
+      <button class="f-reset" type="button" @click="resetFilters">重置筛选</button>
     </div>
 
     <!-- 详情页（点击卡片进入） -->
@@ -61,11 +112,49 @@ const categories = ['全部', '刺激', '亲子', '观光']
 const cat = ref('全部')
 const selectedId = ref(null)
 
-const filtered = computed(() =>
-  cat.value === '全部'
-    ? attractionsDB
-    : attractionsDB.filter((a) => a.category === cat.value)
-)
+/* 身高限制：选项值为身高阈值(cm)，0 表示不限；项目身高线 ≤ 阈值即视为可玩 */
+const heightOptions = [
+  { value: 0, label: '不限' },
+  { value: 90, label: '≥90cm' },
+  { value: 100, label: '≥100cm' },
+  { value: 110, label: '≥110cm' },
+  { value: 120, label: '≥120cm' },
+  { value: 130, label: '≥130cm' }
+]
+const heightSel = ref(0)
+
+/* 排队时长筛选 */
+const waitOptions = [
+  { value: 'all', label: '不限' },
+  { value: 'short', label: '15 分钟内' },
+  { value: 'mid', label: '15 ~ 30 分钟' },
+  { value: 'long', label: '30 分钟以上' }
+]
+const waitSel = ref('all')
+
+/* 排序方式 */
+const sortBy = ref('default')
+
+const filtered = computed(() => {
+  let list =
+    cat.value === '全部' ? [...attractionsDB] : attractionsDB.filter((a) => a.category === cat.value)
+  if (heightSel.value > 0) {
+    list = list.filter((a) => parseInt(a.height) <= heightSel.value)
+  }
+  if (waitSel.value === 'short') list = list.filter((a) => a.wait <= 15)
+  else if (waitSel.value === 'mid') list = list.filter((a) => a.wait > 15 && a.wait <= 30)
+  else if (waitSel.value === 'long') list = list.filter((a) => a.wait > 30)
+  if (sortBy.value === 'price-asc') list.sort((x, y) => (x.price || 0) - (y.price || 0))
+  else if (sortBy.value === 'price-desc') list.sort((x, y) => (y.price || 0) - (x.price || 0))
+  else if (sortBy.value === 'rating-desc') list.sort((x, y) => (y.rating || 0) - (x.rating || 0))
+  return list
+})
+
+function resetFilters() {
+  heightSel.value = 0
+  waitSel.value = 'all'
+  sortBy.value = 'default'
+}
 
 function catClass(c) {
   return { 刺激: 'c-thrill', 亲子: 'c-family', 观光: 'c-sight' }[c] || ''
@@ -143,6 +232,115 @@ function close() {
   background: var(--forest);
   border-color: var(--forest);
   color: #fff;
+}
+
+/* 高级筛选条：身高 / 排队 / 排序 */
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 22px rgba(47, 125, 79, 0.08);
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.f-label {
+  flex: 0 0 84px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--forest-deep);
+}
+.f-chip {
+  border: 1.5px solid var(--wood-light);
+  background: #fafdf8;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.f-chip:hover { border-color: var(--forest); }
+.f-chip.on {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+.f-chip:active { transform: scale(0.94); }
+.f-select {
+  border: 1.5px solid var(--wood-light);
+  background: #fafdf8;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.f-count {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.f-reset {
+  border: none;
+  background: rgba(228, 87, 46, 0.1);
+  color: #c74a1e;
+  font-size: 12.5px;
+  font-weight: 800;
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.f-reset:hover { background: rgba(228, 87, 46, 0.18); }
+.f-reset:active { transform: scale(0.94); }
+
+/* 无结果提示 */
+.attr-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.attr-empty-emoji { font-size: 52px; margin-bottom: 10px; }
+.attr-empty .f-reset { margin-top: 14px; }
+
+/* 卡片价格角标 + 底部价格行 */
+.price-tag {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffc83d, var(--honey));
+  color: #5a3d00;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.rate-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rate {
+  font-weight: 800;
+  color: var(--honey);
+}
+.price {
+  font-weight: 900;
+  color: #e09b00;
 }
 
 /* 卡片网格 */

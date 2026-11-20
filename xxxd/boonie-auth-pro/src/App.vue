@@ -43,12 +43,27 @@
     @tickets="enterTickets"
   />
 
+  <!-- 个人中心页（独立路由） -->
+  <PersonalCenter
+    v-else-if="view === 'profile'"
+    :user="session?.user || null"
+    @back="goHome"
+    @attraction="openAttractionDetail"
+  />
+
   <!-- 森林小游戏中心页（独立路由） -->
   <ForestGames
     v-else-if="view === 'games'"
     :token="session?.token || ''"
     :user="session?.user || null"
     @back="goHome"
+  />
+
+  <!-- 404 页面：未匹配任何路由 -->
+  <NotFound
+    v-else-if="view === 'notfound'"
+    @home="go('/', 'home')"
+    @attractions="enterAttractions"
   />
 
   <!-- 已登录：进入森林游乐园主页 -->
@@ -62,6 +77,7 @@
     @tickets="enterTickets"
     @games="enterGames"
     @member="enterMember"
+    @profile="enterProfile"
   />
 
   <!-- 未登录：森林登录 / 注册页 -->
@@ -83,6 +99,8 @@ import ParkMap from './components/ParkMap.vue'
 import TicketBooking from './components/TicketBooking.vue'
 import ForestGames from './components/ForestGames.vue'
 import MemberCenter from './components/MemberCenter.vue'
+import PersonalCenter from './components/PersonalCenter.vue'
+import NotFound from './components/NotFound.vue'
 
 const session = ref(null)      // 前台会话 { user, token }
 const adminSession = ref(null) // 后台会话 { user, token }
@@ -134,9 +152,10 @@ const ROUTES = [
   { path: '/map', view: 'map' },
   { path: '/tickets', view: 'tickets' },
   { path: '/games', view: 'games' },
-  { path: '/member', view: 'member' }
+  { path: '/member', view: 'member' },
+  { path: '/profile', view: 'profile' }
 ]
-const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map', tickets: '/tickets', games: '/games', member: '/member' }
+const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map', tickets: '/tickets', games: '/games', member: '/member', profile: '/profile' }
 
 function go(path, viewName) {
   if (location.pathname !== path) {
@@ -149,7 +168,8 @@ function go(path, viewName) {
 
 function viewOfPath(path) {
   const hit = ROUTES.find((r) => r.path === path)
-  return hit ? hit.view : 'home'
+  // 未匹配任何路由 → 404 页
+  return hit ? hit.view : 'notfound'
 }
 
 /**
@@ -203,7 +223,8 @@ function onLogin(payload) {
   saveMe(payload.user)
 
   // 若停留在后台路由，但当前账号不是管理员 → 拦回首页
-  if (viewOfPath(location.pathname) !== 'home' && !isAdmin.value) {
+  const p = location.pathname
+  if ((p === '/admin' || p === '/admin/login') && !isAdmin.value) {
     showToast('当前账号为默认权限，无法进入后台管理系统')
     go('/', 'home')
     return
@@ -267,6 +288,19 @@ function enterGames() {
 /** 会员中心：结算成功页「我的会员卡」/ 首页导航「会员中心」 */
 function enterMember() {
   go('/member', 'member')
+}
+
+/** 个人中心：订单 / 收藏 / 浏览历史 / 积分 / 优惠券 / 徽章 */
+function enterProfile() {
+  go('/profile', 'profile')
+}
+
+/** 个人中心点收藏/历史项目 → 回首页并广播打开该项目详情弹窗 */
+function openAttractionDetail(id) {
+  go('/', 'home')
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('boonie_open_attraction', { detail: { id } }))
+  }, 400)
 }
 
 /** 退出后台，回到首页（保留前台会话） */

@@ -27,22 +27,25 @@
 
       <!-- 步骤卡片 -->
       <div class="bk-card reveal">
+        <transition name="step-slide" mode="out-in">
+          <div :key="step" class="step-pane">
         <!-- 步骤 1：选票种 -->
         <div v-if="step === 1">
           <h2 class="bk-h2">① 选择票种</h2>
           <p class="bk-sub">请选择您要购买的门票类型</p>
           <div class="tk-grid">
             <button
-              v-for="t in TICKETS"
+              v-for="(t, i) in TICKETS"
               :key="t.id"
               type="button"
               class="tk"
               :class="{ on: selectedId === t.id, hot: t.tag === '热门' }"
-              :style="{ '--tk': t.color }"
-              @click="selectTicket(t.id)"
+              :style="{ '--tk': t.color, '--i': i }"
+              @click="selectTicket(t, $event)"
             >
               <span v-if="t.tag === '热门'" class="tk-hot">🔥 热门</span>
               <span v-else-if="t.discount" class="tk-disc">{{ t.discount }}</span>
+              <span class="tk-check" :class="{ show: selectedId === t.id }">✓</span>
               <span class="tk-emoji">{{ t.emoji }}</span>
               <span class="tk-name">{{ t.name }}</span>
               <span class="tk-price">
@@ -110,7 +113,7 @@
             </div>
             <div class="stepper">
               <button type="button" :disabled="quantity <= 1" @click="quantity--">−</button>
-              <span class="stepper-num">{{ quantity }}</span>
+              <span class="stepper-num"><span :key="quantity" class="num-roll">{{ quantity }}</span></span>
               <button type="button" :disabled="quantity >= 10" @click="quantity++">＋</button>
             </div>
           </div>
@@ -132,7 +135,7 @@
             <span>小计：{{ quantity }} 张 × ¥{{ selectedTicket.price }}
               <em v-if="saved > 0" class="qty-saved">已省 ¥{{ saved }}</em>
             </span>
-            <b>¥{{ total }}</b>
+            <b><span :key="total" class="num-roll">¥{{ total }}</span></b>
           </div>
         </div>
 
@@ -283,6 +286,8 @@
             </p>
           </div>
         </div>
+          </div>
+        </transition>
 
         <!-- 底部导航 -->
         <div class="bk-foot">
@@ -321,7 +326,7 @@
         </div>
         <div class="price-total">
           <span v-if="pointsDiscountValue > 0" class="price-total-sub">积分抵扣</span>
-          ¥{{ payable }}
+          <span :key="payable" class="num-roll">¥{{ payable }}</span>
         </div>
       </div>
     </section>
@@ -329,8 +334,13 @@
     <!-- ===================== 订单提交成功 ===================== -->
     <section v-else-if="mode === 'success'" class="bk-main">
       <div class="success">
-        <div class="success-badge">✅</div>
-        <h2>预订成功！</h2>
+        <div class="success-badge">
+          <svg class="ok-svg" viewBox="0 0 72 72" aria-hidden="true">
+            <circle class="ok-circle" cx="36" cy="36" r="30" />
+            <path class="ok-check" d="M22 37 L31 46 L50 27" />
+          </svg>
+        </div>
+        <h2>购票成功！</h2>
         <p class="success-sub">您的电子门票已生成，请妥善保管订单号</p>
         <div class="success-order">
           <div class="so-row"><span>订单号</span><b class="so-no">{{ successOrder.id }}</b></div>
@@ -437,6 +447,20 @@
     <transition name="toast">
       <div v-if="toast" class="bk-toast">{{ toast }}</div>
     </transition>
+
+    <!-- 点选票卡：小票飞入底部价格条 -->
+    <span
+      v-if="fly"
+      class="fly-ticket"
+      :class="{ go: fly.go }"
+      :style="{
+        left: fly.x + 'px',
+        top: fly.y + 'px',
+        '--dx': fly.dx + 'px',
+        '--dy': fly.dy + 'px'
+      }"
+      >🎟️</span
+    >
   </div>
 </template>
 
@@ -651,8 +675,32 @@ async function fetchMember() {
 watch([buyerPhone, total], scheduleMemberLookup)
 
 /* ===================== 交互 ===================== */
-function selectTicket(id) {
-  selectedId.value = id
+const fly = ref(null)
+let flyTimer = 0
+
+/** 点选票卡：小票从卡片位置飞入底部价格条 */
+function selectTicket(t, e) {
+  selectedId.value = t.id
+  try {
+    const card = e && e.currentTarget ? e.currentTarget.getBoundingClientRect() : null
+    const target = document.querySelector('.booking .price-bar')?.getBoundingClientRect()
+    if (card && target) {
+      const startX = card.left + card.width / 2 - 16
+      const startY = card.top + card.height / 2 - 16
+      const dx = target.left + target.width / 2 - 16 - startX
+      const dy = target.top + target.height / 2 - 16 - startY
+      clearTimeout(flyTimer)
+      fly.value = { x: startX, y: startY, dx, dy, go: false }
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (fly.value) fly.value = { ...fly.value, go: true }
+        })
+      })
+      flyTimer = setTimeout(() => (fly.value = null), 460)
+    }
+  } catch {
+    /* 飞票动画失败不影响选票 */
+  }
 }
 function next() {
   if (!canNext.value) return
@@ -1877,6 +1925,153 @@ onMounted(async () => {
 .reveal.is-visible {
   opacity: 1;
   transform: none;
+}
+
+/* ===================== 购票动画 ===================== */
+/* ① 票卡依次从下往上淡入上滑 */
+.tk {
+  animation: tk-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes tk-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ② 悬停上浮 + 阴影加深 */
+.tk:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 16px 30px rgba(47, 125, 79, 0.24);
+}
+
+/* ③ 选中：亮绿描边 + 勾选标记弹入 */
+.tk.on {
+  border-color: var(--leaf);
+  box-shadow: 0 0 0 3px rgba(76, 175, 109, 0.28), 0 10px 22px rgba(76, 175, 109, 0.22);
+}
+.tk-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--leaf);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 22px;
+  text-align: center;
+  transform: scale(0);
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tk-check.show {
+  transform: scale(1);
+}
+
+/* ④ 按钮按压缩放回弹 */
+.tk:active,
+.bk-btn:active,
+.stepper button:active,
+.qty-chip:active,
+.mp-chip:active,
+.op-btn:active {
+  transform: scale(0.94);
+  transition-duration: 0.18s;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.bk-btn.primary:active {
+  transform: scale(0.94) !important;
+}
+
+/* ⑤ 点选票卡 → 小票飞入底部价格条 */
+.fly-ticket {
+  position: fixed;
+  z-index: 9999;
+  font-size: 30px;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(47, 125, 79, 0.4));
+  transform: translate(0, 0) scale(1.15) rotate(-8deg);
+  opacity: 1;
+}
+.fly-ticket.go {
+  transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.25) rotate(14deg);
+  opacity: 0.25;
+  transition: transform 0.42s cubic-bezier(0.5, -0.15, 0.65, 1), opacity 0.42s ease-in;
+}
+
+/* ⑥ 步骤面板右侧滑入展开 */
+.step-slide-enter-active {
+  transition: opacity 0.26s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.step-slide-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.step-slide-enter-from {
+  opacity: 0;
+  transform: translateX(36px) scale(0.985);
+}
+.step-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+/* ⑦ 数字滚动更新 */
+.num-roll {
+  display: inline-block;
+  animation: num-roll 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes num-roll {
+  from {
+    opacity: 0;
+    transform: translateY(55%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ⑧ 支付成功：绿色对勾描边动画 */
+.success-badge {
+  display: flex;
+  justify-content: center;
+}
+.ok-svg {
+  width: 88px;
+  height: 88px;
+}
+.ok-circle {
+  fill: rgba(76, 175, 109, 0.1);
+  stroke: var(--leaf);
+  stroke-width: 5;
+  stroke-dasharray: 190;
+  stroke-dashoffset: 190;
+  animation: ok-draw 0.4s ease-out forwards;
+  transform-origin: center;
+  transform: rotate(-90deg);
+}
+.ok-check {
+  fill: none;
+  stroke: var(--leaf);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 46;
+  stroke-dashoffset: 46;
+  animation: ok-draw 0.3s 0.38s ease-out forwards;
+}
+@keyframes ok-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 /* 响应式 */

@@ -7,6 +7,7 @@
 //   desc        项目具体内容（简介 / 玩法说明）
 //   tag         标签（刺激 / 浪漫 / 亲子 / 清凉 / 益智）
 //   wait        预计排队时间（分钟）
+//   price       项目单独票价（元，含在门票内则显示 0/免费）
 //   color       主题色
 //   rating      项目综合评分（0–5，可含小数，由评价实时计算得出）
 //   reviews     游客评价列表：{ id, name, avatar, rating, date, text }
@@ -24,6 +25,7 @@ export const attractionsDB = [
     desc: '穿梭在千年古树之间，俯冲、旋转，尖叫声响彻狗熊岭！全程 880 米，最高时速 78km/h，适合追求刺激的勇敢者。',
     tag: '刺激',
     wait: 25,
+    price: 49,
     color: '#e4572e',
     category: '刺激',
     height: '130cm 以上',
@@ -41,6 +43,7 @@ export const attractionsDB = [
     desc: '升至森林之巅，俯瞰整片狗熊岭的日落与星空。每舱可坐 6 人，缓缓转动 12 分钟一圈，浪漫满分。',
     tag: '浪漫',
     wait: 15,
+    price: 39,
     color: '#7c5cbf',
     category: '观光',
     height: '100cm 以上',
@@ -58,6 +61,7 @@ export const attractionsDB = [
     desc: '呜——哐当哐当，跟着吉吉国王环游五大主题区。全程 1.6 公里，沿途有动物演员挥手互动，亲子首选。',
     tag: '亲子',
     wait: 10,
+    price: 29,
     color: '#2f7d4f',
     category: '亲子',
     height: '90cm 以上',
@@ -75,6 +79,7 @@ export const attractionsDB = [
     desc: '乘上蜂蜜罐小船，顺着金色溪流来一场甜蜜漂流。全长 420 米，中途有喷泉惊喜，清凉解暑。',
     tag: '清凉',
     wait: 30,
+    price: 45,
     color: '#ffb703',
     category: '观光',
     height: '110cm 以上',
@@ -92,6 +97,7 @@ export const attractionsDB = [
     desc: '在光头强的小木屋迷宫里寻宝，小心别被发现哦！共 3 层木质迷宫，藏着 12 个惊喜彩蛋。',
     tag: '益智',
     wait: 8,
+    price: 19,
     color: '#a9743c',
     category: '亲子',
     height: '90cm 以上',
@@ -109,6 +115,7 @@ export const attractionsDB = [
     desc: '从瀑布顶端一跃而下，夏日限定的透心凉体验。落差 18 米，尖叫与水花齐飞，记得带雨衣。',
     tag: '刺激',
     wait: 40,
+    price: 49,
     color: '#2a9d8f',
     category: '刺激',
     height: '120cm 以上',
