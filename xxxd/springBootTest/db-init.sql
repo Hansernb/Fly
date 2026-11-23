@@ -365,6 +365,60 @@ ON DUPLICATE KEY UPDATE
 UPDATE `boonie_ticket` SET `type_code` = CONCAT('ticket_', `id`)
  WHERE `type_code` IS NULL OR `type_code` = '';
 
+-- =============================================================
+-- 后台扩展：轮播图 / 公告 / 评价审核状态
+-- =============================================================
+
+-- ---------------------------- 首页轮播图表 ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_banner` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `title` varchar(64) NOT NULL COMMENT '轮播标题',
+  `subtitle` varchar(200) DEFAULT NULL COMMENT '副标题/描述（前台 desc）',
+  `tag` varchar(32) DEFAULT NULL COMMENT '角标文案，如 🎡 招牌项目',
+  `img` varchar(255) DEFAULT NULL COMMENT '图片地址（/img/... 或 /api/avatar/...）',
+  `link` varchar(64) DEFAULT NULL COMMENT '跳转板块：游乐项目/栖息地/演出/门票/风景',
+  `color` varchar(16) DEFAULT '#2f7d4f' COMMENT '主题色',
+  `sort_no` int NOT NULL DEFAULT 0 COMMENT '展示顺序，越小越靠前',
+  `enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否上架：1 上架 0 下架',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 顶部公告表 ----------------------------
+CREATE TABLE IF NOT EXISTS `boonie_notice` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `content` varchar(255) NOT NULL COMMENT '公告内容（前台滚动播报）',
+  `sort_no` int NOT NULL DEFAULT 0 COMMENT '展示顺序，越小越靠前',
+  `enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否上架：1 上架 0 下架',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- ---------------------------- 评价审核状态迁移 ----------------------------
+-- pending=待审核 / approved=已通过 / rejected=已驳回；存量数据默认已通过，不影响历史展示
+SET @has_review_status := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'boonie_review' AND COLUMN_NAME = 'status'
+);
+SET @sql_review_status := IF(@has_review_status = 0,
+  'ALTER TABLE `boonie_review` ADD COLUMN `status` varchar(16) NOT NULL DEFAULT ''approved'' COMMENT ''审核状态：pending/approved/rejected'' AFTER `content`',
+  'SELECT 1');
+PREPARE _st_rs FROM @sql_review_status; EXECUTE _st_rs; DEALLOCATE PREPARE _st_rs;
+
+-- ---------------------------- 种子：轮播图（对齐首页原有 4 张，INSERT IGNORE 幂等） ----------------------------
+INSERT IGNORE INTO `boonie_banner`
+  (`id`, `title`, `subtitle`, `tag`, `img`, `link`, `color`, `sort_no`, `enabled`) VALUES
+(1, '森林摩天轮', '360° 俯瞰整片狗熊岭林海，黄昏时最浪漫。', '🎡 招牌项目', '/img/ferris.jpeg', '游乐项目', '#7c5cbf', 1, 1),
+(2, '林海过山车', '穿梭树冠间的极速轨道，熊二都直呼过瘾！', '🎢 尖叫首选', '/img/coaster.gif', '游乐项目', '#e4572e', 2, 1),
+(3, '激流勇进漂流', '顺溪而下穿越原始森林，全程水花四溅。', '🛶 清凉一夏', '/img/rafting.jpeg', '游乐项目', '#2a9d8f', 3, 1),
+(4, '小熊观光火车', '慢悠悠绕园一圈，熊大熊二沿途陪你打招呼。', '🚂 全家同游', '/img/train.jpeg', '游乐项目', '#4caf6d', 4, 1);
+
+-- ---------------------------- 种子：顶部公告（对齐首页原有播报，INSERT IGNORE 幂等） ----------------------------
+INSERT IGNORE INTO `boonie_notice` (`id`, `content`, `sort_no`, `enabled`) VALUES
+(1, '🕘 开园时间：09:00 - 21:00（20:30 停止入园）', 1, 1),
+(2, '☀️ 今日天气：晴 12~22°C，紫外线偏强，请注意防晒', 2, 1),
+(3, '📌 临时通知：「树洞过山车」11月23日例行检修，暂停开放一天，敬请谅解', 3, 1);
+
 SET FOREIGN_KEY_CHECKS = 1;
 
-SELECT 'db-init.sql 执行完成（用户/栖息地/演出/5 种门票 + 门票订单表 + 小游戏成绩表 已就绪）' AS `result`;
+SELECT 'db-init.sql 执行完成（用户/栖息地/演出/门票/订单/成绩/轮播/公告 已就绪）' AS `result`;

@@ -11,7 +11,6 @@ import com.fenglin.springboottest.mapper.TicketOrderMapper;
 import com.fenglin.springboottest.service.AuthService;
 import com.fenglin.springboottest.service.MemberService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,7 +38,6 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "http://192.168.68.47:5173")
 public class TicketOrderController {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

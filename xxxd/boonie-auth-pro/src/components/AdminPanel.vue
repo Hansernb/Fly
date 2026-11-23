@@ -69,19 +69,105 @@
           <div class="head-actions">
             <span v-if="msg" class="msg" :class="{ err: msgType === 'err' }">{{ msg }}</span>
             <button class="btn-ghost" type="button" @click="load">🔄 刷新</button>
-            <button class="btn-primary" type="button" @click="openCreate">＋ 新增</button>
+            <button
+              v-if="activeKey !== 'dashboard' && !current.noCreate"
+              class="btn-primary"
+              type="button"
+              @click="openCreate"
+            >＋ 新增</button>
           </div>
         </div>
 
+        <!-- ============ 数据看板 ============ -->
+        <div v-if="activeKey === 'dashboard'" class="dash">
+          <div class="kpi-grid">
+            <div v-for="k in kpis" :key="k.key" class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-ico">{{ k.icon }}</span>
+                <span class="kpi-label">{{ k.label }}</span>
+              </div>
+              <div class="kpi-value">{{ k.value }}<small>{{ k.unit }}</small></div>
+              <div class="kpi-foot">{{ k.note }}</div>
+            </div>
+          </div>
+
+          <div class="chart-grid">
+            <section class="chart-card wide">
+              <h2 class="chart-title">访客数与订单量趋势 <small>近 7 天</small></h2>
+              <div class="legend">
+                <span><i class="lg green"></i>访客数</span>
+                <span><i class="lg gold"></i>订单量</span>
+              </div>
+              <svg viewBox="0 0 620 190" class="chart-svg" role="img" aria-label="访客数与订单量趋势折线图">
+                <g v-for="i in 5" :key="'g' + i">
+                  <line x1="46" :y1="16 + (i - 1) * 36" x2="606" :y2="16 + (i - 1) * 36" stroke="#eef2ef" stroke-width="1" />
+                  <text x="38" :y="20 + (i - 1) * 36" class="axis" text-anchor="end">
+                    {{ Math.round(trendMax * (5 - i) / 4) }}
+                  </text>
+                </g>
+                <polyline :points="linePoints('visitors')" fill="none" stroke="#3f9c68" stroke-width="3" stroke-linejoin="round" />
+                <polyline :points="linePoints('orders')" fill="none" stroke="#e0a52a" stroke-width="3" stroke-linejoin="round" />
+                <circle v-for="(p, i) in pointList('visitors')" :key="'v' + i" :cx="p.x" :cy="p.y" r="3.5" fill="#3f9c68" />
+                <circle v-for="(p, i) in pointList('orders')" :key="'o' + i" :cx="p.x" :cy="p.y" r="3.5" fill="#e0a52a" />
+                <text v-for="(t, i) in dash.trend" :key="'x' + i" :x="xAt(i)" y="186" class="axis" text-anchor="middle">{{ t.date }}</text>
+              </svg>
+            </section>
+
+            <section class="chart-card">
+              <h2 class="chart-title">好评率 <small>4 星及以上</small></h2>
+              <div class="donut-wrap">
+                <svg viewBox="0 0 140 140" class="donut" role="img" aria-label="好评率环形图">
+                  <circle cx="70" cy="70" r="52" fill="none" stroke="#eef2ef" stroke-width="14" />
+                  <circle cx="70" cy="70" r="52" fill="none" stroke="#3f9c68" stroke-width="14"
+                    stroke-linecap="round" :stroke-dasharray="goodDash" transform="rotate(-90 70 70)" />
+                  <text x="70" y="68" text-anchor="middle" class="donut-val">{{ sum.goodRate }}%</text>
+                  <text x="70" y="88" text-anchor="middle" class="donut-sub">{{ sum.goodReviews }}/{{ sum.totalReviews }} 条好评</text>
+                </svg>
+              </div>
+              <p class="chart-note">待审核评价 {{ sum.pendingReviews }} 条，审核通过后才计入统计与前台展示。</p>
+            </section>
+
+            <section class="chart-card wide">
+              <h2 class="chart-title">门票销量 <small>近 7 天 · 张</small></h2>
+              <svg viewBox="0 0 620 190" class="chart-svg" role="img" aria-label="门票销量柱状图">
+                <g v-for="i in 4" :key="'bg' + i">
+                  <line x1="46" :y1="20 + (i - 1) * 38" x2="606" :y2="20 + (i - 1) * 38" stroke="#eef2ef" stroke-width="1" />
+                  <text x="38" :y="24 + (i - 1) * 38" class="axis" text-anchor="end">
+                    {{ Math.round(ticketMax * (4 - i) / 3) }}
+                  </text>
+                </g>
+                <g v-for="(b, i) in bars" :key="'bar' + i">
+                  <rect :x="b.x" :y="b.y" width="42" :height="b.h" rx="6" fill="#8fc3a5" />
+                  <text :x="b.x + 21" :y="b.y - 6" class="axis" text-anchor="middle">{{ b.v }}</text>
+                  <text :x="b.x + 21" y="186" class="axis" text-anchor="middle">{{ dash.trend[i].date }}</text>
+                </g>
+              </svg>
+            </section>
+
+            <section class="chart-card">
+              <h2 class="chart-title">票种销量分布 <small>累计</small></h2>
+              <div v-if="dash.ticketSales.length" class="sales-list">
+                <div v-for="t in dash.ticketSales" :key="t.name" class="sales-row">
+                  <span class="sales-name">{{ t.name }}</span>
+                  <div class="sales-track"><div class="sales-fill" :style="{ width: salesWidth(t.qty) }"></div></div>
+                  <b class="sales-qty">{{ t.qty }}</b>
+                </div>
+              </div>
+              <p v-else class="chart-note">暂无订单数据</p>
+            </section>
+          </div>
+          <p class="tip">📈 数据来自订单、用户与评价表实时聚合；访客数 = 注册用户 + 游客订单去重手机号，点击「刷新」可更新。</p>
+        </div>
+
         <!-- 数据表格 -->
-        <div class="table-card">
+        <div v-if="activeKey !== 'dashboard'" class="table-card">
           <table class="tbl">
             <thead>
               <tr>
-                <th class="col-drag" title="拖拽排序"></th>
+                <th v-if="!current.noDrag" class="col-drag" title="拖拽排序"></th>
                 <th class="col-idx">#</th>
                 <th v-for="c in current.columns" :key="c.key">{{ c.label }}</th>
-                <th class="col-switch">上下架</th>
+                <th v-if="!current.noSwitch" class="col-switch">上下架</th>
                 <th class="col-ops">操作</th>
               </tr>
             </thead>
@@ -97,14 +183,14 @@
                 @drop.prevent="onDrop(i)"
                 @dragend="onDragEnd"
               >
-                <td class="col-drag"><span class="drag-handle" title="按住拖拽排序">⋮⋮</span></td>
+                <td v-if="!current.noDrag" class="col-drag"><span class="drag-handle" title="按住拖拽排序">⋮⋮</span></td>
                 <td class="col-idx">{{ i + 1 }}</td>
                 <td v-for="c in current.columns" :key="c.key">
                   <span v-if="c.type === 'color'" class="dot" :style="{ background: row[c.key] }"></span>
                   <img v-else-if="c.type === 'avatar'" class="tbl-avatar" :src="row[c.key] || defaultAvatar" :alt="c.label" />
                   <span v-else>{{ display(row, c) }}</span>
                 </td>
-                <td class="col-switch">
+                <td v-if="!current.noSwitch" class="col-switch">
                   <button
                     type="button"
                     class="sw"
@@ -116,8 +202,25 @@
                   </button>
                 </td>
                 <td class="col-ops">
-                  <button class="op" type="button" @click="openEdit(row)">编辑</button>
-                  <button class="op danger" type="button" @click="removeRow(row)">删除</button>
+                  <template v-if="current.key === 'reviews'">
+                    <button
+                      v-if="row.status !== 'approved'"
+                      class="op ok"
+                      type="button"
+                      @click="reviewRow(row, 'approved')"
+                    >通过</button>
+                    <button
+                      v-if="row.status !== 'rejected'"
+                      class="op"
+                      type="button"
+                      @click="reviewRow(row, 'rejected')"
+                    >驳回</button>
+                    <button class="op danger" type="button" @click="removeRow(row)">删除</button>
+                  </template>
+                  <template v-else>
+                    <button class="op" type="button" @click="openEdit(row)">编辑</button>
+                    <button class="op danger" type="button" @click="removeRow(row)">删除</button>
+                  </template>
                 </td>
               </tr>
               <tr v-if="!rows.length">
@@ -127,10 +230,21 @@
           </table>
         </div>
 
-        <p class="tip">
-          💡 拖拽行首的 ⋮⋮ 可调整顺序；「上下架」控制前台是否展示。
-          <template v-if="current.api">本模块已对接后端接口，保存后前台首页实时生效。</template>
-          <template v-else>本模块为本地配置（后端暂未开放接口），数据保存在浏览器本地。</template>
+        <p v-if="activeKey !== 'dashboard'" class="tip">
+          <template v-if="current.key === 'reviews'">
+            💡 游客提交的评价默认「待审核」，通过后才会展示在前台；也可直接删除违规评价。
+          </template>
+          <template v-else-if="current.key === 'settings'">
+            💡 新增用户需填账号、邮箱和初始密码（≥6 位）；编辑时密码留空表示不修改。不能删除当前登录的管理员。
+          </template>
+          <template v-else-if="current.key === 'banner' || current.key === 'notice'">
+            💡 排序值越小越靠前；「上下架」开关直接写库并同步前台。轮播图可上传图片（≤2MB）或填 /img/... 路径。
+          </template>
+          <template v-else>
+            💡 拖拽行首的 ⋮⋮ 可调整顺序；「上下架」控制前台是否展示。
+            <template v-if="current.api">本模块已对接后端接口，保存后前台首页实时生效。</template>
+            <template v-else>本模块为本地配置（后端暂未开放接口），数据保存在浏览器本地。</template>
+          </template>
         </p>
       </div>
     </main>
@@ -185,6 +299,34 @@
               rows="3"
             ></textarea>
 
+            <div v-else-if="c.type === 'image'" class="image-edit">
+              <img v-if="form[c.key]" class="image-prev" :src="form[c.key]" alt="图片预览" />
+              <input
+                v-model="form[c.key]"
+                class="fld-input"
+                type="text"
+                placeholder="填 /img/... 路径，或点右侧上传"
+              />
+              <label class="btn-upload">
+                ＋ 上传图片
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="avatar-edit-file"
+                  :disabled="uploadingAvatar"
+                  @change="onImageUpload($event, c.key)"
+                />
+              </label>
+            </div>
+
+            <input
+              v-else-if="c.type === 'password'"
+              v-model="form[c.key]"
+              class="fld-input"
+              type="password"
+              :placeholder="editing && editing.id ? '留空表示不修改密码' : '请输入密码'"
+            />
+
             <input v-else-if="c.type === 'color'" v-model="form[c.key]" class="fld-color" type="color" />
 
             <input
@@ -196,7 +338,7 @@
             />
           </label>
 
-          <div class="fld fld-inline">
+          <div v-if="!current.noSwitch" class="fld fld-inline">
             <span class="fld-label">上架状态</span>
             <button type="button" class="sw" :class="{ on: form.enabled !== false }" @click="toggleFormEnabled">
               <span class="sw-dot"></span>
@@ -254,21 +396,68 @@ async function uploadAvatar(file) {
 /* ===================== 模块配置（9 个菜单） ===================== */
 const SECTIONS = [
   {
+    key: 'dashboard',
+    name: '数据看板',
+    icon: '📊',
+    desc: '访客数、订单量、门票销量、好评率实时聚合',
+    dashboard: true
+  },
+  {
     key: 'banner',
-    name: '首页 Banner 管理',
+    name: '轮播图管理',
     icon: '🖼️',
-    desc: '配置前台首页顶部轮播横幅的内容与跳转',
+    desc: '配置首页轮播图（数据库 boonie_banner，前台实时生效）',
+    api: '/api/admin/banners',
     columns: [
       { key: 'title', label: '标题', type: 'text' },
-      { key: 'subtitle', label: '副标题', type: 'text' },
+      { key: 'subtitle', label: '副标题', type: 'textarea' },
+      { key: 'tag', label: '角标', type: 'text' },
+      { key: 'img', label: '图片', type: 'image' },
       { key: 'link', label: '跳转板块', type: 'select', options: ['游乐项目', '栖息地', '演出', '门票', '风景'] },
-      { key: 'color', label: '主色', type: 'color' }
+      { key: 'color', label: '主题色', type: 'color' },
+      { key: 'sortNo', label: '排序', type: 'number' }
     ],
-    seed: [
-      { title: '春日森林季', subtitle: '樱花飘落的日子，来狗熊岭散步吧', link: '游乐项目', color: '#f2a0bd' },
-      { title: '熊出没剧场', subtitle: '每天四场，熊大熊二等你来', link: '演出', color: '#f5a623' },
-      { title: '亲子探险路线', subtitle: '一条线玩遍十大打卡点', link: '风景', color: '#4c9be8' }
-    ]
+    seed: []
+  },
+  {
+    key: 'notice',
+    name: '公告管理',
+    icon: '📢',
+    desc: '维护首页顶部滚动公告（数据库 boonie_notice）',
+    api: '/api/admin/notices',
+    columns: [
+      { key: 'content', label: '公告内容', type: 'textarea' },
+      { key: 'sortNo', label: '排序', type: 'number' }
+    ],
+    seed: []
+  },
+  {
+    key: 'reviews',
+    name: '评价审核',
+    icon: '✅',
+    desc: '审核游客评价，通过后才会展示在前台（数据库 boonie_review）',
+    api: '/api/admin/reviews',
+    noDrag: true,
+    noSwitch: true,
+    noCreate: true,
+    columns: [
+      { key: 'attraction', label: '所属项目', type: 'text' },
+      { key: 'name', label: '评价人', type: 'text' },
+      { key: 'rating', label: '评分', type: 'text' },
+      { key: 'date', label: '日期', type: 'text' },
+      { key: 'text', label: '评价内容', type: 'textarea' },
+      {
+        key: 'status',
+        label: '状态',
+        type: 'select',
+        options: [
+          { value: 'pending', label: '待审核' },
+          { value: 'approved', label: '已通过' },
+          { value: 'rejected', label: '已驳回' }
+        ]
+      }
+    ],
+    seed: []
   },
   {
     key: 'projects',
@@ -438,14 +627,17 @@ const SECTIONS = [
   },
   {
     key: 'settings',
-    name: '管理员设置',
-    icon: '👤',
-    desc: '查看并调整账号权限、头像等（对接后端用户接口）',
+    name: '用户列表管理',
+    icon: '👥',
+    desc: '管理注册用户：新增 / 改资料 / 重置密码 / 改权限 / 删除',
     api: '/api/admin/users',
+    noDrag: true,
+    noSwitch: true,
     columns: [
       { key: 'avatar', label: '头像', type: 'avatar' },
       { key: 'name', label: '账号', type: 'text' },
       { key: 'email', label: '邮箱', type: 'text' },
+      { key: 'password', label: '密码', type: 'password' },
       {
         key: 'permission',
         label: '权限',
@@ -454,7 +646,8 @@ const SECTIONS = [
           { value: 0, label: '管理员' },
           { value: 1, label: '普通用户' }
         ]
-      }
+      },
+      { key: 'createdAt', label: '注册时间', type: 'text' }
     ],
     seed: []
   }
@@ -463,6 +656,61 @@ const SECTIONS = [
 const activeKey = ref(SECTIONS[0].key)
 const current = computed(() => SECTIONS.find((s) => s.key === activeKey.value))
 const rows = ref([])
+
+/* ===================== 数据看板 ===================== */
+const dash = ref({ summary: {}, trend: [], ticketSales: [] })
+const sum = computed(() => dash.value.summary || {})
+const kpis = computed(() => [
+  { key: 'visitors', icon: '👥', label: '访客数', value: sum.value.visitors ?? 0, unit: '人', note: '注册用户 + 游客去重' },
+  { key: 'orders', icon: '📦', label: '订单量', value: sum.value.orders ?? 0, unit: '单', note: '不含已取消订单' },
+  { key: 'tickets', icon: '🎫', label: '门票销量', value: sum.value.ticketsSold ?? 0, unit: '张', note: '累计已售门票' },
+  {
+    key: 'rate',
+    icon: '⭐',
+    label: '好评率',
+    value: sum.value.goodRate ?? 0,
+    unit: '%',
+    note: `${sum.value.goodReviews ?? 0} 条好评 / ${sum.value.totalReviews ?? 0} 条评价`
+  }
+])
+const trendMax = computed(() =>
+  Math.max(1, ...dash.value.trend.flatMap((t) => [Number(t.visitors) || 0, Number(t.orders) || 0]))
+)
+const ticketMax = computed(() => Math.max(1, ...dash.value.trend.map((t) => Number(t.tickets) || 0)))
+function xAt(i) {
+  return 46 + i * (560 / Math.max(1, dash.value.trend.length - 1))
+}
+function pointList(key) {
+  return dash.value.trend.map((t, i) => ({
+    x: xAt(i),
+    y: 160 - (Number(t[key]) || 0) / trendMax.value * 136
+  }))
+}
+function linePoints(key) {
+  return pointList(key).map((p) => `${p.x},${p.y}`).join(' ')
+}
+const bars = computed(() =>
+  dash.value.trend.map((t, i) => {
+    const v = Number(t.tickets) || 0
+    const h = Math.max(2, v / ticketMax.value * 120)
+    return { x: 52 + i * 82, y: 152 - h, h, v }
+  })
+)
+const goodDash = computed(() => `${((Number(sum.value.goodRate) || 0) / 100 * 326.7).toFixed(1)} 326.7`)
+const maxSales = computed(() => Math.max(1, ...dash.value.ticketSales.map((t) => Number(t.qty) || 0)))
+function salesWidth(q) {
+  return Math.max(3, (Number(q) || 0) / maxSales.value * 100) + '%'
+}
+async function loadDashboard() {
+  try {
+    const res = await fetch('/api/admin/dashboard', { headers: authHeaders() })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const json = await res.json()
+    if (json && json.data) dash.value = json.data
+  } catch {
+    flash('看板数据加载失败，请确认后端已启动', 'err')
+  }
+}
 const msg = ref('')
 const msgType = ref('ok')
 const editing = ref(null)
@@ -504,6 +752,10 @@ function persistOverlay() {
 /* ===================== 数据加载 ===================== */
 async function load() {
   const sec = current.value
+  if (sec.dashboard) {
+    await loadDashboard()
+    return
+  }
   rows.value = []
   if (sec.api) {
     try {
@@ -590,6 +842,14 @@ async function saveForm() {
       const payload = {}
       sec.columns.forEach((c) => (payload[c.key] = form[c.key]))
       const isEdit = !!(editing.value && editing.value.id)
+      if (sec.key === 'settings') {
+        const pwd = String(payload.password || '').trim()
+        if (!isEdit && !pwd) {
+          flash('请填写初始密码', 'err')
+          return
+        }
+        if (isEdit && !pwd) delete payload.password   // 留空 = 不修改密码
+      }
       const res = await fetch(sec.api + (isEdit ? '/' + editing.value.id : ''), {
         method: isEdit ? 'PUT' : 'POST',
         headers: authHeaders(),
@@ -644,11 +904,62 @@ async function removeRow(row) {
   await load()
 }
 
-function toggleEnabled(row) {
+async function toggleEnabled(row) {
   row.enabled = row.enabled === false
+  if (current.value.key === 'banner' || current.value.key === 'notice') {
+    try {
+      const res = await fetch(current.value.api + '/' + (row.id ?? row._k), {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ enabled: row.enabled })
+      })
+      if (!res.ok) throw new Error('HTTP ' + res.status)
+      flash(row.enabled ? '已上架，前台已同步 ✓' : '已下架，前台已同步 ✓')
+    } catch {
+      row.enabled = !row.enabled
+      flash('上架状态保存失败', 'err')
+    }
+    return
+  }
   if (current.value.api) persistOverlay()
   else persistLocal()
   flash(row.enabled ? '已上架' : '已下架')
+}
+
+/** 评价审核：通过 / 驳回 */
+async function reviewRow(row, status) {
+  try {
+    const res = await fetch('/api/admin/reviews/' + row.id, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ status })
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      flash(d.message || '操作失败', 'err')
+      return
+    }
+    flash(status === 'approved' ? '已通过，评价现已在前台展示 ✓' : '已驳回，评价不会在前台展示')
+    await load()
+  } catch {
+    flash('网络异常，请确认后端已启动', 'err')
+  }
+}
+
+/** 图片字段上传（轮播图等） */
+async function onImageUpload(e, key) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  uploadingAvatar.value = true
+  try {
+    form[key] = await uploadAvatar(file)
+    flash('图片已上传，点「保存」生效')
+  } catch (err) {
+    flash(err.message || '图片上传失败', 'err')
+  } finally {
+    uploadingAvatar.value = false
+    e.target.value = ''
+  }
 }
 
 /* ===================== 拖拽排序 ===================== */
@@ -685,6 +996,8 @@ function flash(text, type = 'ok') {
 function display(row, c) {
   const v = row[c.key]
   if (c.key === 'permission') return Number(v) === 0 ? '管理员' : '普通用户'
+  if (c.key === 'status') return v === 'approved' ? '已通过' : v === 'rejected' ? '已驳回' : '待审核'
+  if (c.key === 'password') return '••••••'
   if (v === undefined || v === null || v === '') return '—'
   const s = String(v)
   return s.length > 22 ? s.slice(0, 22) + '…' : s
@@ -1022,6 +1335,15 @@ onMounted(load)
   border-color: #e08a7a;
   color: #c0392b;
 }
+.op.ok {
+  border-color: #bfe3c8;
+  background: #eaf6ee;
+  color: #2f7d4f;
+}
+.op.ok:hover {
+  border-color: #3f9c68;
+  background: #dff0e5;
+}
 .dot {
   display: inline-block;
   width: 18px;
@@ -1241,5 +1563,211 @@ onMounted(load)
   width: 100%;
   font-size: 11px;
   color: #8b9a90;
+}
+
+/* ================= 图片字段（轮播图） ================= */
+.image-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.image-prev {
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid #e6ebe6;
+  background: #f6f9f7;
+}
+.btn-upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  border: 1px dashed #c3cec5;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #5f7066;
+  cursor: pointer;
+  overflow: hidden;
+}
+.btn-upload:hover {
+  border-color: #e8c46a;
+  color: #b5811a;
+}
+
+/* ================= 数据看板 ================= */
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.kpi-card {
+  background: #fff;
+  border: 1px solid #e6ebe6;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 10px rgba(30, 50, 38, 0.05);
+}
+.kpi-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kpi-ico {
+  font-size: 18px;
+}
+.kpi-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #7d8c82;
+}
+.kpi-value {
+  margin-top: 10px;
+  font-size: 29px;
+  font-weight: 800;
+  color: #24382c;
+  line-height: 1.1;
+}
+.kpi-value small {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8b9a90;
+  margin-left: 4px;
+}
+.kpi-foot {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #9aa79e;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.chart-card {
+  background: #fff;
+  border: 1px solid #e6ebe6;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 10px rgba(30, 50, 38, 0.05);
+  min-width: 0;
+}
+.chart-card.wide {
+  grid-column: span 2;
+}
+.chart-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #24382c;
+}
+.chart-title small {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #9aa79e;
+  margin-left: 6px;
+}
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.axis {
+  fill: #9aa79e;
+  font-size: 11px;
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #7d8c82;
+  margin-bottom: 4px;
+}
+.lg {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.lg.green { background: #3f9c68; }
+.lg.gold { background: #e0a52a; }
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+}
+.donut {
+  width: 150px;
+  height: 150px;
+}
+.donut-val {
+  fill: #24382c;
+  font-size: 25px;
+  font-weight: 800;
+}
+.donut-sub {
+  fill: #9aa79e;
+  font-size: 10.5px;
+}
+.chart-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: #9aa79e;
+  line-height: 1.6;
+}
+.sales-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 6px 0;
+}
+.sales-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.sales-name {
+  width: 74px;
+  flex-shrink: 0;
+  color: #5f7066;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sales-track {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: #f0f4f1;
+  overflow: hidden;
+}
+.sales-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8fc3a5, #3f9c68);
+}
+.sales-qty {
+  width: 32px;
+  text-align: right;
+  color: #24382c;
+}
+
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chart-grid { grid-template-columns: 1fr; }
+  .chart-card.wide { grid-column: span 1; }
 }
 </style>

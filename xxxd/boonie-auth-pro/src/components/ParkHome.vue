@@ -102,9 +102,9 @@
         <div class="notice-track">
           <div class="notice-run">
             <span v-for="n in 2" :key="n" class="notice-run-seg">
-              <b>🕘 开园时间</b>：09:00 - 21:00（20:30 停止入园）&nbsp;&nbsp;┃&nbsp;&nbsp;
-              <b>☀️ 今日天气</b>：晴 12~22°C，紫外线偏强，请注意防晒&nbsp;&nbsp;┃&nbsp;&nbsp;
-              <b>📌 临时通知</b>：「树洞过山车」11月23日例行检修，暂停开放一天，敬请谅解&nbsp;&nbsp;┃&nbsp;&nbsp;
+              <template v-for="(text, i) in notices" :key="i">
+                {{ text }}&nbsp;&nbsp;┃&nbsp;&nbsp;
+              </template>
             </span>
           </div>
         </div>
@@ -880,11 +880,14 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import StarRating from './StarRating.vue'
-import { attractionsDB } from '../data/attractions.js'
 import { TICKETS, loadTickets } from '../data/tickets.js'
 import ParkMap from './ParkMap.vue'
 import ShowSchedule from './ShowSchedule.vue'
 import HabitatCards from './HabitatCards.vue'
+import { getMe, postReview as submitReviewApi } from '../api/content.js'
+import { storeToRefs } from 'pinia'
+import { useContentStore } from '../stores/content.js'
+import { FALLBACK_IMG } from '../data/fallback.js'
 
 const props = defineProps({
   user: { type: Object, required: true },
@@ -904,7 +907,7 @@ const isAdmin = computed(() => Number(props.user?.permission) === 0)
      avatar.jpg 头像
 */
 const DEFAULT_AVATAR = '/img/avatar.jpg' // 默认用户头像
-const FALLBACK_IMG = '/img/background.png' // 项目/栖息地缺省配图
+// FALLBACK_IMG 已移到 src/data/fallback.js，由顶部 import 引入（与 content store 共用同一份）
 
 // 评价人 emoji 头像 → 真实照片（命中不到则用默认头像图）
 const AVATAR_IMG = {
@@ -959,54 +962,29 @@ function avatarEmoji(r) {
   return typeof a === 'string' && a && !a.startsWith('/') ? a : '🐻'
 }
 
-/* ===================== 数据：从数据库（Spring Boot + MySQL）加载 ===================== */
-const attractions = ref([])
+/* ===================== 数据：由 content store 统一管理 =====================
+ * attractions / bannerSlides / notices / loading / apiError / loadedFromApi / lastUpdated
+ * 与热门推荐 hotAttractions 都已收进 src/stores/content.js。
+ * 这里用 storeToRefs 取出同名可写 ref，下方模板与业务代码无需改动；
+ * 后续拆出去的子组件也能直接读同一个 store，不必层层传 props。
+ */
+const content = useContentStore()
+const {
+  attractions,
+  bannerSlides,
+  notices,
+  loading,
+  apiError,
+  loadedFromApi,
+  lastUpdated,
+  hotAttractions
+} = storeToRefs(content)
 
 /* 顶部公告栏开关 */
 const noticeOpen = ref(true)
 
-/* 热门项目推荐：按评分取前 5 个 */
-const hotAttractions = computed(() =>
-  [...attractions.value].sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 5)
-)
-const loading = ref(false)
-const apiError = ref('')
-const loadedFromApi = ref(false)
-const lastUpdated = ref('')
-
 async function fetchAttractions() {
-  loading.value = true
-  apiError.value = ''
-  try {
-    const res = await fetch('/api/attractions', {
-      headers: { Authorization: 'Bearer ' + props.token }
-    })
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    const json = await res.json()
-    const list = json && Array.isArray(json.data) ? json.data : null
-    if (!list) throw new Error('数据格式异常')
-    attractions.value = list.map((a) => ({
-      id: a.id,
-      emoji: a.emoji,
-      img: a.img || (attractionsDB.find((x) => x.id === a.id) || {}).img || FALLBACK_IMG,
-      name: a.name,
-      desc: a.desc || a.description || '',
-      tag: a.tag,
-      wait: a.wait != null ? a.wait : a.waitMinutes != null ? a.waitMinutes : 0,
-      color: a.color || '#2f7d4f',
-      rating: a.rating || 0,
-      reviews: Array.isArray(a.reviews) ? a.reviews.map((r) => ({ ...r })) : []
-    }))
-    loadedFromApi.value = true
-    lastUpdated.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  } catch (e) {
-    // 后端 / 数据库不可达时降级为内置示例数据，保证页面始终有内容可看
-    attractions.value = attractionsDB.map((a) => ({ ...a, reviews: [...(a.reviews || [])] }))
-    loadedFromApi.value = false
-    apiError.value = '数据库暂时连不上，已切换为示例数据（请先启动后端与 MySQL）'
-  } finally {
-    loading.value = false
-  }
+  await content.loadAttractions(props.token)
 }
 
 /* ===================== 聚合评价 ===================== */
@@ -1056,15 +1034,9 @@ function waitLevel(w) {
 
 /* ===================== 提交评价（写入数据库） ===================== */
 async function postReview(payload) {
-  const res = await fetch('/api/reviews', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + props.token },
-    body: JSON.stringify(payload)
-  })
-  if (!res.ok) throw new Error('提交失败')
-  const json = await res.json()
+  const json = await submitReviewApi(payload, props.token)
   return (
-    json.review || {
+    json?.review || {
       id: Date.now(),
       name: payload.name,
       avatar: payload.avatar,
@@ -1082,22 +1054,18 @@ async function submitReview() {
   if (!form.rating || !form.text || !form.attractionId) return
   submitting.value = true
   try {
-    const rev = await postReview({
+    await postReview({
       attractionId: Number(form.attractionId),
       name: props.user.name,
       avatar: myAvatar.value,   // 用当前真实头像（含用户自己换过的），不再固定默认图
       rating: Number(form.rating),
       content: form.text
     })
-    const target = attractions.value.find((a) => a.id === Number(form.attractionId))
-    if (target) {
-      target.reviews.unshift({ ...rev, attraction: target.name, attractionId: target.id })
-      recalc(target)
-    }
+    // 新评价需管理员审核通过后才会展示，故不立即插入列表
     form.rating = 0
     form.text = ''
     form.attractionId = null
-    showToast('🐾 评价发布成功！')
+    showToast('🐾 评价已提交，审核通过后展示')
   } catch (e) {
     showToast('😢 评价发布失败，请稍后再试')
   } finally {
@@ -1227,15 +1195,14 @@ async function submitDetailReview() {
   }
   detailSubmitting.value = true
   try {
-    const rev = await postReview({
+    await postReview({
       attractionId: detail.value.id,
       name: props.user.name,
       avatar: myAvatar.value,   // 同底部表单：用真实头像
       rating: Number(detailForm.rating),
       content: detailForm.text
     })
-    detail.value.reviews.unshift({ ...rev, attraction: detail.value.name, attractionId: detail.value.id })
-    recalc(detail.value)
+    // 新评价需管理员审核通过后才会展示，故不立即插入列表
     detailForm.rating = 0
     detailForm.text = ''
     try {
@@ -1243,7 +1210,7 @@ async function submitDetailReview() {
     } catch {
       /* ignore */
     }
-    showToast('🐾 评价发布成功！')
+    showToast('🐾 评价已提交，审核通过后展示')
   } catch (e) {
     showToast('😢 评价发布失败，请稍后再试')
   } finally {
@@ -1371,19 +1338,24 @@ async function saveMyAvatar() {
   }
 }
 
-/* ===================== 热门项目轮播 Banner ===================== */
-const bannerSlides = [
-  { img: '/img/ferris.jpeg', tag: '🎡 招牌项目', title: '森林摩天轮', desc: '360° 俯瞰整片狗熊岭林海，黄昏时最浪漫。' },
-  { img: '/img/coaster.gif', tag: '🎢 尖叫首选', title: '林海过山车', desc: '穿梭树冠间的极速轨道，熊二都直呼过瘾！' },
-  { img: '/img/rafting.jpeg', tag: '🛶 清凉一夏', title: '激流勇进漂流', desc: '顺溪而下穿越原始森林，全程水花四溅。' },
-  { img: '/img/train.jpeg', tag: '🚂 全家同游', title: '小熊观光火车', desc: '慢悠悠绕园一圈，熊大熊二沿途陪你打招呼。' }
-]
+/* ===================== 热门项目轮播 Banner（后台可维护） =====================
+ * bannerSlides 与兜底数据由 content store 管理（见 src/stores/content.js），
+ * 这里只保留与「播放动画」相关的 UI 状态。
+ */
 const bIndex = ref(0)
 let bannerTimer = null
+
+async function loadBanners() {
+  await content.loadBanners()
+  bIndex.value = 0
+  startBanner()
+}
+
 function startBanner() {
   stopBanner()
+  if (bannerSlides.value.length < 2) return
   bannerTimer = setInterval(() => {
-    bIndex.value = (bIndex.value + 1) % bannerSlides.length
+    bIndex.value = (bIndex.value + 1) % bannerSlides.value.length
   }, 4000)
 }
 function stopBanner() {
@@ -1393,16 +1365,25 @@ function stopBanner() {
   }
 }
 function nextBanner() {
-  bIndex.value = (bIndex.value + 1) % bannerSlides.length
+  if (!bannerSlides.value.length) return
+  bIndex.value = (bIndex.value + 1) % bannerSlides.value.length
   startBanner()
 }
 function prevBanner() {
-  bIndex.value = (bIndex.value - 1 + bannerSlides.length) % bannerSlides.length
+  if (!bannerSlides.value.length) return
+  bIndex.value = (bIndex.value - 1 + bannerSlides.value.length) % bannerSlides.value.length
   startBanner()
 }
 function goBanner(i) {
   bIndex.value = i
   startBanner()
+}
+
+/* ===================== 顶部公告（后台可维护） =====================
+ * notices 与兜底数据由 content store 管理，此处只保留加载入口。
+ */
+async function loadNotices() {
+  await content.loadNotices()
 }
 
 /* ===================== 园区实时环境数据 ===================== */
@@ -1416,19 +1397,19 @@ const liveData = [
 /* ===================== 生命周期 / 导航 / 搜索（保留原逻辑） ===================== */
 onMounted(async () => {
   try {
-    const res = await fetch('/api/me', {
-      headers: { Authorization: 'Bearer ' + props.token }
-    })
-    if (!res.ok) {
+    await getMe(props.token)
+  } catch (e) {
+    // 仅令牌失效（401/403）才登出；后端 500 或不可达时保持页面展示（与原逻辑一致但更精确）
+    if (e.status === 401 || e.status === 403) {
       localStorage.removeItem('boonie_token')
       emit('logout')
       return
     }
-  } catch {
-    // 后端不可达时保持页面展示
   }
   await fetchAttractions()
   await loadTickets()   // 门票从 MySQL（/api/tickets）加载，失败自动降级内置票库
+  loadBanners()         // 轮播图从库里读，失败降级内置 4 张
+  loadNotices()         // 顶部公告从库里读，失败降级内置文案
   setupScrollSpy()
   setupReveal()
   loadScenery()

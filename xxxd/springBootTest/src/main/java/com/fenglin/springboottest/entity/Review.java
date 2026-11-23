@@ -28,5 +28,7 @@ public class Review {
     private LocalDate reviewDate;
     /** 评价内容 */
     private String content;
+    /** 审核状态：pending=待审核 / approved=已通过 / rejected=已驳回（前台只展示 approved） */
+    private String status;
     private LocalDateTime createdAt;
 }

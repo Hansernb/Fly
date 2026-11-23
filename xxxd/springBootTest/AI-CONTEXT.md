@@ -22,6 +22,8 @@
 2. **数据库不存在**：`Unknown database 'boonie_auth'` → 跑一遍 `db-init.sql` 即可，表结构见脚本。
 3. **MySQL 客户端路径**：`C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`（PATH 里没有 mysql）。
 4. **系统环境**：JDK 21（项目要求 17+，兼容）、无系统 mvn（必须用项目自带 mvnw.cmd）、MySQL 是 Windows 服务。
+5. **局域网 IP 统一为 `192.168.68.33`（2026-11-23 全项目替换，原 `192.168.68.47`）**：目前 IP 只出现在 **2 个必要位置**——`application-dev.properties` 的 `server.address`、前端 `vite.config.js` 的 `/api` 代理目标（另有已弃用的 `server/index.js` 监听地址同步改了）。**8 个 Controller 上写死来源的 `@CrossOrigin(origins=...)` 已全部删除**，CORS 改由 `AppConfig` 全局单点管理（见下方 CORS 条），换 IP 不再需要改任何 Java 文件。**改 IP 前先用 `ipconfig` 确认本机确实持有该地址**——`server.address` 绑定一个本机没有的 IP 会导致 Tomcat 启动直接失败（"Cannot assign requested address"）。本机当前 IPv4 为 `192.168.68.33`（另有 192.168.55.1 / 192.168.137.1 / 172.26.48.1 虚拟网卡）。
+6. **AI 沙箱会注入 `SERVER__PORT`（双下划线）等环境变量**：用 `mvnw spring-boot:run` 裸启动会被松散绑定劫持到随机端口（如 59677）。`start.bat` 已用显式 `--server.port=%BE_PORT%` 覆盖；AI 命令行验证时须先 `Remove-Item Env:SERVER__PORT` 并同样传 `--server.port=8080`。
 
 ## 快速验证清单
 1. 启动后看到 `Tomcat started on port 8080` + `Started SpringBootTestApplication`
@@ -122,4 +124,16 @@
 - 取消订单：`cancel` 调 `memberService.rollback`（抵扣积分全额退还只回余额；赚取积分扣回，余额与 cum_points 一起回退）
 - ⚠️ **会员模块文件曾整体丢失**（2026-11-11 编译报 `找不到符号 Member / MemberService`）：若再次出现，检查 `entity/Member`、`entity/PointLog`、`mapper/MemberMapper`、`mapper/PointLogMapper`、`service/(impl/)MemberService*`、`controller/MemberController` 是否缺失，别去改 TicketOrderController
 - 游戏成绩 `GAME_NAMES` 白名单已含 `run`（森林跑酷）
-- **CORS（重要）**：浏览器对同源 POST fetch 也会带 Origin 头，旧的 `@CrossOrigin(origins="http://localhost:5173")` 在前端换端口（如 5174）时报 403 "Invalid CORS request"（curl 测不出，因为 curl 不带 Origin）。已改为 `config/AppConfig.java` 全局 `allowedOriginPatterns("*")`，勿再回退成写死来源
+- **CORS（重要，2026-11-23 已收敛为单点）**：浏览器对同源 POST fetch 也会带 Origin 头，旧的 `@CrossOrigin(origins="写死某IP:5173")` 在前端换端口/换主机（localhost、127.0.0.1、局域网 IP）时报 403 "Invalid CORS request"（curl 不带 Origin 测不出）。现由 `config/AppConfig.java` 全局 `addMapping("/api/**").allowedOriginPatterns("*")` **统一单点管理，8 个 Controller 上冗余的 `@CrossOrigin` 注解已全部删除**。实测 localhost:5173 / 127.0.0.1:5173 / 192.168.68.33:5173 / localhost:5174 预检全部 200。**勿再给 Controller 加写死来源的 @CrossOrigin**（会覆盖全局配置、且换 IP 又要改 8 处 Java 文件）
+
+## 后台数据看板 + 轮播/公告/评价审核/用户 CRUD（2026-11-23 新增）
+- `db-init.sql` 幂等新增：`boonie_banner`（轮播图）、`boonie_notice`（公告）；`boonie_review` 加 `status` 列（pending/approved/rejected，存量默认 approved）；两张表各有 4 条 / 3 条种子。**必须跑 db-init.sql（start.bat 每次启动会自动跑）新表才存在**，否则 `/api/banners`、`/api/notices`、看板会 500
+- 实体/Mapper：`entity/Banner.java`、`entity/Notice.java`、`mapper/BannerMapper.java`、`mapper/NoticeMapper.java`；`Review` 增加 `status` 字段
+- 看板 `GET /api/admin/dashboard`：返回 `{ data: { summary, trend, ticketSales, updatedAt } }`
+  - 口径：访客数 = 注册用户数 + 游客订单去重 buyer_phone；订单量 = 非取消订单；门票销量 = sum(quantity)；好评率 = 已通过评价里 rating≥4 占比（百分比两位小数）；另有 revenue / pendingReviews
+  - `trend` 为近 7 天（含今日）按 created_at / review_date 聚合；`ticketSales` 按票名累计销量倒序
+  - 实现在 `AdminController.dashboard()`，用 Java 内存聚合（无 XML SQL），字段缺失按 0 处理
+- **评价审核**：`POST /api/reviews` 新评价写 `status=pending`；`AttractionServiceImpl.listWithReviews()` 只查 `status=approved`，故提交后前台不立即显示。`GET /api/admin/reviews?status=pending` 过滤，`PUT /api/admin/reviews/{id}` body `{ status: approved|rejected }` 审核；`DataInitializer` 种子评价显式写 approved
+- **轮播/公告后台 CRUD**：`/api/admin/banners`、`/api/admin/notices` 各支持 GET/POST/PUT{id}/DELETE{id}；PUT 支持 `enabled` 上下架（boolVal 兼容 "true"/1）。前台公开接口 `GET /api/banners`、`GET /api/notices`（ContentController，仅 enabled、按 sort_no 排序）
+- **用户 CRUD 补全**：`POST /api/admin/users` 新增（name/email/password≥6/permission/avatar，校验 name+email 唯一）、`DELETE /api/admin/users/{id}`（禁止删自己，先解绑 member.user_id）、`PUT /api/admin/users/{id}` 新增支持 name/email（唯一校验）
+- 注意 `AdminController` 里订单 Mapper 字段名是 `ticketOrderMapper`（不是 orderMapper）；`Member` 相关解绑用到 `memberMapper`

@@ -15,7 +15,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "http://192.168.68.47:5173")
 public class AttractionController {
 
     @Autowired
@@ -82,6 +81,7 @@ public class AttractionController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
         out.put("review", toReviewMap(r, null, null));
+        out.put("message", "评价已提交，待管理员审核通过后展示");
         return out;
     }
 

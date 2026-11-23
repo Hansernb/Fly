@@ -10,8 +10,8 @@
   <!-- 后台管理系统（已通过后台登录） -->
   <AdminPanel
     v-if="view === 'admin'"
-    :user="adminSession.user"
-    :token="adminSession.token"
+    :user="adminSession?.user"
+    :token="adminSession?.token || ''"
     @exit="exitAdmin"
   />
 
@@ -60,11 +60,7 @@
   />
 
   <!-- 404 页面：未匹配任何路由 -->
-  <NotFound
-    v-else-if="view === 'notfound'"
-    @home="go('/', 'home')"
-    @attractions="enterAttractions"
-  />
+  <NotFound v-else-if="view === 'notfound'" @home="go('/')" @attractions="enterAttractions" />
 
   <!-- 已登录：进入森林游乐园主页 -->
   <ParkHome
@@ -89,6 +85,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useSessionStore } from './stores/session'
 import ForestPanel from './components/ForestPanel.vue'
 import AuthCard from './components/AuthCard.vue'
 import ParkHome from './components/ParkHome.vue'
@@ -102,105 +101,27 @@ import MemberCenter from './components/MemberCenter.vue'
 import PersonalCenter from './components/PersonalCenter.vue'
 import NotFound from './components/NotFound.vue'
 
-const session = ref(null)      // 前台会话 { user, token }
-const adminSession = ref(null) // 后台会话 { user, token }
-const view = ref('home')       // home | adminLogin | admin | attractions | map | tickets
-const toast = ref('')          // 权限拦截提示文案
-const presetTicketId = ref('') // 从首页票卡直接预订时携带的票种 id
-
-/**
- * 当前登录用户（含 permission）：
- *   1 = 默认权限（注册用户），0 = 管理员权限
- * 刷新页面时从本地缓存恢复，用于路由权限守卫。
- * 真正的权限校验始终以后端为准（/api/admin/* 会校验 permission==0，否则 403）。
+/* ===================== 基础设施：vue-router + Pinia =====================
+ * 改造前：App.vue 用 ref('view') + ROUTES 数组 + popstate 手写路由，
+ *         会话状态用 ref + 手写 localStorage。
+ * 改造后：路由交给 vue-router（见 src/router/index.js，含全局守卫），
+ *         会话交给 Pinia（见 src/stores/session.js）。
+ * 本组件的模板结构、事件契约、样式保持不变 —— 页面外观与交互零变化。
  */
-const me = ref(null)
+const route = useRoute()
+const router = useRouter()
+const store = useSessionStore()
+const { session, adminSession, toast } = storeToRefs(store)
 
-function loadMe() {
-  try {
-    const raw = localStorage.getItem('boonie_user')
-    me.value = raw ? JSON.parse(raw) : null
-  } catch {
-    me.value = null
-  }
-}
+/** 当前视图名 = 路由名，模板里的 v-if 链沿用原来的判断方式 */
+const view = computed(() => route.name || 'notfound')
 
-function saveMe(user) {
-  me.value = user || null
-  if (user) localStorage.setItem('boonie_user', JSON.stringify(user))
-  else localStorage.removeItem('boonie_user')
-}
+/** 从首页票卡直接预订时携带的票种 id */
+const presetTicketId = ref('')
 
-const isAdmin = computed(() => Number(me.value?.permission) === 0)
-
-let toastTimer = null
-function showToast(msg) {
-  toast.value = msg
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toast.value = ''), 2800)
-}
-
-/**
- * 轻量前端路由：把视图与地址栏同步（/ → 前台，/admin/login → 后台登录，/admin → 后台主页）
- * 项目未引入 vue-router，这里用 History API 保持地址可读且支持浏览器前进/后退。
- */
-const ROUTES = [
-  { path: '/', view: 'home' },
-  { path: '/admin/login', view: 'adminLogin' },
-  { path: '/admin', view: 'admin' },
-  { path: '/attractions', view: 'attractions' },
-  { path: '/map', view: 'map' },
-  { path: '/tickets', view: 'tickets' },
-  { path: '/games', view: 'games' },
-  { path: '/member', view: 'member' },
-  { path: '/profile', view: 'profile' }
-]
-const PATH_OF = { home: '/', adminLogin: '/admin/login', admin: '/admin', attractions: '/attractions', map: '/map', tickets: '/tickets', games: '/games', member: '/member', profile: '/profile' }
-
-function go(path, viewName) {
-  if (location.pathname !== path) {
-    history.pushState({ view: viewName }, '', path)
-    // 标记本次会话发生过站内跳转：刷新后仍保留，用于「返回上一页」判断
-    try { sessionStorage.setItem('boonie_nav', '1') } catch {}
-  }
-  view.value = viewName
-}
-
-function viewOfPath(path) {
-  const hit = ROUTES.find((r) => r.path === path)
-  // 未匹配任何路由 → 404 页
-  return hit ? hit.view : 'notfound'
-}
-
-/**
- * 后台路由权限守卫：
- *   /admin       —— 必须持有后台令牌，否则回落 /admin/login
- *   /admin/login —— 默认权限用户（permission === 1）禁止进入，拦回首页并提示
- */
-function guard(v) {
-  if (v === 'admin') {
-    return localStorage.getItem('boonie_admin_token') ? 'admin' : 'adminLogin'
-  }
-  if (v === 'adminLogin') {
-    if (localStorage.getItem('boonie_admin_token')) return 'admin'
-    // 已登录但非管理员 → 不允许进入后台登录
-    if (me.value && Number(me.value.permission) !== 0) {
-      showToast('当前账号为默认权限，无法进入后台管理系统')
-      return 'home'
-    }
-    return 'adminLogin'
-  }
-  return v
-}
-
-function onPopState() {
-  const v = viewOfPath(location.pathname)
-  const g = guard(v)
-  if (g !== v) {
-    go(PATH_OF[g], g)
-    return
-  }
-  view.value = v
+/** 统一导航入口（保留原 go(path) 的调用习惯，第二参数已不再需要） */
+function go(path) {
+  router.push(path)
 }
 
 /**
@@ -208,96 +129,86 @@ function onPopState() {
  * 只有在没有任何站内历史可退时（如新标签直达子页），才兜底回首页。
  */
 function goHome() {
-  let hasNav = false
-  try { hasNav = sessionStorage.getItem('boonie_nav') === '1' } catch {}
-  if (hasNav && window.history.length > 1 && window.history.state && window.history.state.view) {
-    window.history.back()
+  if (window.history.state?.back) {
+    router.back()
     return
   }
-  go('/', 'home')
+  router.replace('/')
 }
 
 function onLogin(payload) {
   // payload.user.permission：1 = 默认权限，0 = 管理员
-  session.value = payload
-  saveMe(payload.user)
+  store.setSession(payload)
 
   // 若停留在后台路由，但当前账号不是管理员 → 拦回首页
-  const p = location.pathname
-  if ((p === '/admin' || p === '/admin/login') && !isAdmin.value) {
-    showToast('当前账号为默认权限，无法进入后台管理系统')
-    go('/', 'home')
+  if ((route.path === '/admin' || route.path === '/admin/login') && !store.isAdmin) {
+    store.showToast('当前账号为默认权限，无法进入后台管理系统')
+    router.replace('/')
     return
   }
-  if (location.pathname !== '/') go('/', 'home')
+  if (route.path !== '/') router.replace('/')
 }
 
 function onLogout() {
-  localStorage.removeItem('boonie_token')
-  localStorage.removeItem('boonie_admin_token')
-  localStorage.removeItem('boonie_user')
-  session.value = null
-  adminSession.value = null
-  me.value = null
-  go('/', 'home')
+  store.logout()
+  router.replace('/')
 }
 
 /** 首页导航栏点「后台管理」齿轮：跳转 /admin/login（该按钮仅管理员可见） */
 function enterAdminLogin() {
-  if (!isAdmin.value) {
-    showToast('当前账号为默认权限，无法进入后台管理系统')
+  if (!store.isAdmin) {
+    store.showToast('当前账号为默认权限，无法进入后台管理系统')
     return
   }
-  go('/admin/login', 'adminLogin')
+  router.push('/admin/login')
 }
 
 /** 后台登录成功：必须是管理员才允许进入 /admin */
 function onAdminLogin(payload) {
   if (Number(payload?.user?.permission) !== 0) {
     localStorage.removeItem('boonie_admin_token')
-    showToast('权限不足：仅管理员可进入后台管理系统')
-    go('/', 'home')
+    store.showToast('权限不足：仅管理员可进入后台管理系统')
+    router.replace('/')
     return
   }
-  adminSession.value = payload
-  saveMe(payload.user)
-  go('/admin', 'admin')
+  store.setAdminSession(payload)
+  router.replace('/admin')
 }
 
 /** 首页导航「项目大全」→ 进入游乐项目列表页 */
 function enterAttractions() {
-  go('/attractions', 'attractions')
+  router.push('/attractions')
 }
 
 /** 首页导航「园区地图」→ 进入手绘地图页 */
 function enterMap() {
-  go('/map', 'map')
+  router.push('/map')
 }
 
 /** 首页导航「门票预订」→ 进入在线订票流程页（可携带预选票种） */
 function enterTickets(ticketId) {
   presetTicketId.value = typeof ticketId === 'string' ? ticketId : ''
-  go('/tickets', 'tickets')
+  router.push('/tickets')
 }
 
 /** 首页「森林小游戏」入口 → 进入小游戏中心页 */
 function enterGames() {
-  go('/games', 'games')
+  router.push('/games')
 }
 
 /** 会员中心：结算成功页「我的会员卡」/ 首页导航「会员中心」 */
 function enterMember() {
-  go('/member', 'member')
+  router.push('/member')
 }
 
 /** 个人中心：订单 / 收藏 / 浏览历史 / 积分 / 优惠券 / 徽章 */
 function enterProfile() {
-  go('/profile', 'profile')
+  router.push('/profile')
 }
 
 /** 个人中心点收藏/历史项目 → 回首页并广播打开该项目详情弹窗 */
 function openAttractionDetail(id) {
-  go('/', 'home')
+  router.push('/')
   setTimeout(() => {
     window.dispatchEvent(new CustomEvent('boonie_open_attraction', { detail: { id } }))
   }, 400)
@@ -305,20 +216,17 @@ function openAttractionDetail(id) {
 
 /** 退出后台，回到首页（保留前台会话） */
 function exitAdmin() {
-  localStorage.removeItem('boonie_admin_token')
-  adminSession.value = null
-  go('/', 'home')
+  store.exitAdmin()
+  router.replace('/')
 }
 
 onMounted(() => {
-  loadMe()
-  window.addEventListener('popstate', onPopState)
-  onPopState()
+  // 兜底：若 main.js 的恢复逻辑未执行（如 HMR 热更新），这里再恢复一次
+  if (!store.me && !store.session) store.restore()
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('popstate', onPopState)
-  clearTimeout(toastTimer)
+  clearTimeout(store._toastTimer)
 })
 </script>
 

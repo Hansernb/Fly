@@ -27,7 +27,6 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/avatar")
-@CrossOrigin(origins = "http://192.168.68.47:5173")
 public class AvatarController {
 
     @Autowired

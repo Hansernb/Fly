@@ -1,21 +1,30 @@
 package com.fenglin.springboottest.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fenglin.springboottest.common.AvatarStorage;
 import com.fenglin.springboottest.common.BizException;
 import com.fenglin.springboottest.entity.Attraction;
+import com.fenglin.springboottest.entity.Banner;
 import com.fenglin.springboottest.entity.GameScore;
 import com.fenglin.springboottest.entity.Habitat;
+import com.fenglin.springboottest.entity.Member;
+import com.fenglin.springboottest.entity.Notice;
 import com.fenglin.springboottest.entity.Review;
 import com.fenglin.springboottest.entity.Show;
 import com.fenglin.springboottest.entity.Ticket;
+import com.fenglin.springboottest.entity.TicketOrder;
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.mapper.AttractionMapper;
+import com.fenglin.springboottest.mapper.BannerMapper;
 import com.fenglin.springboottest.mapper.GameScoreMapper;
 import com.fenglin.springboottest.mapper.HabitatMapper;
+import com.fenglin.springboottest.mapper.MemberMapper;
+import com.fenglin.springboottest.mapper.NoticeMapper;
 import com.fenglin.springboottest.mapper.ReviewMapper;
 import com.fenglin.springboottest.mapper.ShowMapper;
 import com.fenglin.springboottest.mapper.TicketMapper;
+import com.fenglin.springboottest.mapper.TicketOrderMapper;
 import com.fenglin.springboottest.mapper.UserMapper;
 import com.fenglin.springboottest.service.AuthService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -23,11 +32,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 后台管理系统接口（/api/admin/**）
@@ -36,7 +50,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "http://192.168.68.47:5173")
 public class AdminController {
 
     @Autowired
@@ -59,6 +72,14 @@ public class AdminController {
     private GameScoreMapper gameScoreMapper;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private TicketOrderMapper ticketOrderMapper;
+    @Autowired
+    private BannerMapper bannerMapper;
+    @Autowired
+    private NoticeMapper noticeMapper;
+    @Autowired
+    private MemberMapper memberMapper;
 
     /** 统一鉴权：必须是管理员 */
     private User requireAdmin(String authHeader) {
@@ -165,17 +186,21 @@ public class AdminController {
 
     // ==================== 游客评价管理 ====================
 
-    /** GET /api/admin/reviews —— 全部评价（带所属项目名） */
+    /** GET /api/admin/reviews?status=pending —— 全部评价（带所属项目名，可按审核状态过滤） */
     @GetMapping("/reviews")
     public Map<String, Object> listReviews(
-            @RequestHeader(value = "Authorization", required = false) String auth) {
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestParam(value = "status", required = false) String status) {
         requireAdmin(auth);
         Map<Long, String> names = new LinkedHashMap<>();
         for (Attraction a : attractionMapper.selectList(null)) {
             names.put(a.getId(), a.getName());
         }
+        LambdaQueryWrapper<Review> qw = new LambdaQueryWrapper<>();
+        if (status != null && !status.isBlank()) qw.eq(Review::getStatus, status.trim());
+        qw.orderByDesc(Review::getId);
         List<Map<String, Object>> list = new ArrayList<>();
-        for (Review r : reviewMapper.selectList(null)) {
+        for (Review r : reviewMapper.selectList(qw)) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", r.getId());
             m.put("attractionId", r.getAttractionId());
@@ -185,9 +210,30 @@ public class AdminController {
             m.put("rating", r.getRating());
             m.put("date", r.getReviewDate() != null ? r.getReviewDate().toString() : "");
             m.put("text", r.getContent());
+            m.put("status", r.getStatus() == null ? "approved" : r.getStatus());
             list.add(m);
         }
         return ok(list);
+    }
+
+    /** PUT /api/admin/reviews/{id} —— 审核评价 { status: approved|rejected } */
+    @PutMapping("/reviews/{id}")
+    public Map<String, Object> reviewReview(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Review r = reviewMapper.selectById(id);
+        if (r == null) throw new BizException(404, "评价不存在");
+        String status = str(body.get("status"));
+        if (!"approved".equals(status) && !"rejected".equals(status))
+            throw new BizException(400, "审核状态只能是 approved 或 rejected");
+        r.setStatus(status);
+        reviewMapper.updateById(r);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("status", status);
+        return ok(m);
     }
 
     /** DELETE /api/admin/reviews/{id} —— 删除评价 */
@@ -251,6 +297,23 @@ public class AdminController {
         if (u == null)
             throw new BizException(404, "用户不存在");
 
+        if (body.containsKey("name")) {
+            String name = str(body.get("name"));
+            if (name == null || name.isBlank()) throw new BizException(400, "用户名不能为空");
+            Long dup = userMapper.selectCount(new LambdaQueryWrapper<User>()
+                    .eq(User::getName, name).ne(User::getId, id));
+            if (dup != null && dup > 0) throw new BizException(400, "用户名已存在");
+            u.setName(name.trim());
+        }
+        if (body.containsKey("email")) {
+            String email = str(body.get("email"));
+            if (email == null || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))
+                throw new BizException(400, "邮箱格式不正确");
+            Long dup = userMapper.selectCount(new LambdaQueryWrapper<User>()
+                    .eq(User::getEmail, email).ne(User::getId, id));
+            if (dup != null && dup > 0) throw new BizException(400, "邮箱已存在");
+            u.setEmail(email.trim());
+        }
         if (body.containsKey("permission")) {
             Integer p = intVal(body.get("permission"), 1);
             if (p != 0 && p != 1)
@@ -293,6 +356,66 @@ public class AdminController {
         m.put("permission", u.getPermission());
         m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
         return ok(m);
+    }
+
+    /** POST /api/admin/users —— 新增用户（后台创建管理员 / 普通用户） */
+    @PostMapping("/users")
+    public Map<String, Object> createUser(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String name = str(body.get("name"));
+        String email = str(body.get("email"));
+        String pwd = str(body.get("password"));
+        if (name == null || name.isBlank()) throw new BizException(400, "用户名不能为空");
+        if (email == null || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))
+            throw new BizException(400, "邮箱格式不正确");
+        if (pwd == null || pwd.length() < 6) throw new BizException(400, "密码至少 6 位");
+
+        Long dup = userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getName, name.trim()).or().eq(User::getEmail, email.trim()));
+        if (dup != null && dup > 0) throw new BizException(400, "用户名或邮箱已存在");
+
+        User u = new User();
+        u.setName(name.trim());
+        u.setEmail(email.trim());
+        u.setPassword(pwd);                       // 明文（与项目现有约定一致）
+        u.setPermission(intVal(body.get("permission"), 1));
+        String av = str(body.get("avatar"));
+        u.setAvatar(av == null || av.isBlank() ? "" : av);
+        u.setCreatedAt(LocalDateTime.now());
+        userMapper.insert(u);
+        return ok(userMap(u));
+    }
+
+    /** DELETE /api/admin/users/{id} —— 删除用户（不允许删除自己） */
+    @DeleteMapping("/users/{id}")
+    public Map<String, Object> deleteUser(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        User admin = requireAdmin(auth);
+        if (admin.getId().equals(id)) throw new BizException(400, "不能删除当前登录的管理员");
+        User u = userMapper.selectById(id);
+        if (u == null) throw new BizException(404, "用户不存在");
+        // 会员档案解绑，避免下次注册同名账号时积分落到旧档案上
+        for (Member m : memberMapper.selectList(
+                new LambdaQueryWrapper<Member>().eq(Member::getUserId, id))) {
+            m.setUserId(null);
+            memberMapper.updateById(m);
+        }
+        userMapper.deleteById(id);
+        return ok(id);
+    }
+
+    private Map<String, Object> userMap(User u) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", u.getId());
+        m.put("name", u.getName());
+        m.put("email", u.getEmail());
+        m.put("permission", u.getPermission() == null ? 1 : u.getPermission());
+        m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
+        m.put("createdAt", u.getCreatedAt() != null ? u.getCreatedAt().toString() : "");
+        return m;
     }
 
     // ==================== 栖息地管理 ====================
@@ -630,6 +753,264 @@ public class AdminController {
         return ok(id);
     }
 
+    // ==================== 数据看板 ====================
+
+    /**
+     * GET /api/admin/dashboard —— 访客数 / 订单量 / 门票销量 / 好评率 + 近 7 天趋势 + 票种销量分布
+     * 口径：
+     *   访客数 = 注册用户数 + 游客订单去重手机号；订单量 = 非取消订单数；
+     *   门票销量 = 非取消订单 quantity 之和；好评率 = 已通过评价中 4 星及以上占比。
+     */
+    @GetMapping("/dashboard")
+    public Map<String, Object> dashboard(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+
+        List<User> users = userMapper.selectList(null);
+        List<TicketOrder> orders = ticketOrderMapper.selectList(null);
+        List<Review> reviews = reviewMapper.selectList(null);
+
+        List<TicketOrder> active = new ArrayList<>();
+        for (TicketOrder o : orders) if (!"已取消".equals(o.getStatus())) active.add(o);
+
+        Set<String> guestPhones = new HashSet<>();
+        for (TicketOrder o : active) {
+            if (o.getUserId() == null && o.getBuyerPhone() != null && !o.getBuyerPhone().isBlank())
+                guestPhones.add(o.getBuyerPhone());
+        }
+
+        long ticketsSold = 0;
+        BigDecimal revenue = BigDecimal.ZERO;
+        for (TicketOrder o : active) {
+            ticketsSold += o.getQuantity() == null ? 0 : o.getQuantity();
+            if (o.getTotalAmount() != null) revenue = revenue.add(o.getTotalAmount());
+        }
+
+        List<Review> approved = new ArrayList<>();
+        long pending = 0;
+        for (Review r : reviews) {
+            if ("pending".equals(r.getStatus())) pending++;
+            if (r.getStatus() == null || "approved".equals(r.getStatus())) approved.add(r);
+        }
+        long good = goodCount(approved);
+        double goodRate = approved.isEmpty() ? 0 : Math.round(good * 10000.0 / approved.size()) / 100.0;
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("visitors", users.size() + guestPhones.size());
+        summary.put("orders", active.size());
+        summary.put("ticketsSold", ticketsSold);
+        summary.put("goodRate", goodRate);
+        summary.put("revenue", revenue.setScale(2, java.math.RoundingMode.HALF_UP));
+        summary.put("totalReviews", approved.size());
+        summary.put("goodReviews", good);
+        summary.put("pendingReviews", pending);
+
+        // 近 7 天趋势（含今日）
+        List<Map<String, Object>> trend = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+        for (int i = 6; i >= 0; i--) {
+            LocalDate day = today.minusDays(i);
+            long dayVisitors = users.stream().filter(u -> sameDay(u.getCreatedAt(), day)).count();
+            Set<String> dayGuests = new HashSet<>();
+            for (TicketOrder o : active) {
+                if (o.getUserId() == null && sameDay(o.getCreatedAt(), day)
+                        && o.getBuyerPhone() != null && !o.getBuyerPhone().isBlank())
+                    dayGuests.add(o.getBuyerPhone());
+            }
+            long dayOrders = active.stream().filter(o -> sameDay(o.getCreatedAt(), day)).count();
+            long dayTickets = 0;
+            for (TicketOrder o : active) {
+                if (sameDay(o.getCreatedAt(), day)) dayTickets += o.getQuantity() == null ? 0 : o.getQuantity();
+            }
+            List<Review> dayReviews = new ArrayList<>();
+            for (Review r : approved) if (r.getReviewDate() != null && r.getReviewDate().equals(day)) dayReviews.add(r);
+            long dayGood = goodCount(dayReviews);
+            double dayRate = dayReviews.isEmpty() ? 0 : Math.round(dayGood * 10000.0 / dayReviews.size()) / 100.0;
+
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("date", day.toString().substring(5));
+            t.put("visitors", dayVisitors + dayGuests.size());
+            t.put("orders", dayOrders);
+            t.put("tickets", dayTickets);
+            t.put("goodRate", dayRate);
+            trend.add(t);
+        }
+
+        // 票种销量分布
+        Map<String, Long> byTicket = new LinkedHashMap<>();
+        for (TicketOrder o : active) {
+            String name = o.getTicketName() == null || o.getTicketName().isBlank() ? "其它" : o.getTicketName();
+            byTicket.merge(name, (long) (o.getQuantity() == null ? 0 : o.getQuantity()), Long::sum);
+        }
+        List<Map.Entry<String, Long>> entries = new ArrayList<>(byTicket.entrySet());
+        entries.sort(Comparator.<Map.Entry<String, Long>>comparingLong(Map.Entry::getValue).reversed());
+        List<Map<String, Object>> ticketSales = new ArrayList<>();
+        for (Map.Entry<String, Long> e : entries) {
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("name", e.getKey());
+            t.put("qty", e.getValue());
+            ticketSales.add(t);
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("summary", summary);
+        data.put("trend", trend);
+        data.put("ticketSales", ticketSales);
+        data.put("updatedAt", LocalDateTime.now().toString().substring(0, 19));
+        return ok(data);
+    }
+
+    private boolean sameDay(LocalDateTime t, LocalDate day) {
+        return t != null && t.toLocalDate().equals(day);
+    }
+
+    private long goodCount(List<Review> list) {
+        long n = 0;
+        for (Review r : list) {
+            if (r.getRating() != null && r.getRating().compareTo(BigDecimal.valueOf(4)) >= 0) n++;
+        }
+        return n;
+    }
+
+    // ==================== 轮播图管理 ====================
+
+    private Map<String, Object> bannerMap(Banner b) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", b.getId());
+        m.put("title", b.getTitle());
+        m.put("subtitle", b.getSubtitle());
+        m.put("tag", b.getTag());
+        m.put("img", b.getImg());
+        m.put("link", b.getLink());
+        m.put("color", b.getColor());
+        m.put("sortNo", b.getSortNo());
+        m.put("enabled", b.getEnabled());
+        return m;
+    }
+
+    @GetMapping("/banners")
+    public Map<String, Object> listBanners(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Banner b : bannerMapper.selectList(new LambdaQueryWrapper<Banner>().orderByAsc(Banner::getSortNo, Banner::getId)))
+            list.add(bannerMap(b));
+        return ok(list);
+    }
+
+    @PostMapping("/banners")
+    public Map<String, Object> createBanner(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String title = str(body.get("title"));
+        if (title == null || title.isBlank()) throw new BizException(400, "轮播标题不能为空");
+        Banner b = new Banner();
+        b.setTitle(title.trim());
+        b.setSubtitle(def(body.get("subtitle"), ""));
+        b.setTag(def(body.get("tag"), ""));
+        b.setImg(str(body.get("img")));
+        b.setLink(def(body.get("link"), "游乐项目"));
+        b.setColor(def(body.get("color"), "#2f7d4f"));
+        b.setSortNo(intVal(body.get("sortNo"), 99));
+        b.setEnabled(true);
+        b.setCreatedAt(LocalDateTime.now());
+        bannerMapper.insert(b);
+        return ok(bannerMap(b));
+    }
+
+    @PutMapping("/banners/{id}")
+    public Map<String, Object> updateBanner(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Banner b = bannerMapper.selectById(id);
+        if (b == null) throw new BizException(404, "轮播图不存在");
+        if (body.containsKey("title")) b.setTitle(str(body.get("title")));
+        if (body.containsKey("subtitle")) b.setSubtitle(str(body.get("subtitle")));
+        if (body.containsKey("tag")) b.setTag(str(body.get("tag")));
+        if (body.containsKey("img")) b.setImg(str(body.get("img")));
+        if (body.containsKey("link")) b.setLink(str(body.get("link")));
+        if (body.containsKey("color")) b.setColor(str(body.get("color")));
+        if (body.containsKey("sortNo")) b.setSortNo(intVal(body.get("sortNo"), b.getSortNo()));
+        if (body.containsKey("enabled")) b.setEnabled(boolVal(body.get("enabled"), b.getEnabled()));
+        bannerMapper.updateById(b);
+        return ok(bannerMap(b));
+    }
+
+    @DeleteMapping("/banners/{id}")
+    public Map<String, Object> deleteBanner(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        if (bannerMapper.selectById(id) == null) throw new BizException(404, "轮播图不存在");
+        bannerMapper.deleteById(id);
+        return ok(id);
+    }
+
+    // ==================== 公告管理 ====================
+
+    private Map<String, Object> noticeMap(Notice n) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", n.getId());
+        m.put("content", n.getContent());
+        m.put("sortNo", n.getSortNo());
+        m.put("enabled", n.getEnabled());
+        return m;
+    }
+
+    @GetMapping("/notices")
+    public Map<String, Object> listNotices(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Notice n : noticeMapper.selectList(new LambdaQueryWrapper<Notice>().orderByAsc(Notice::getSortNo, Notice::getId)))
+            list.add(noticeMap(n));
+        return ok(list);
+    }
+
+    @PostMapping("/notices")
+    public Map<String, Object> createNotice(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String content = str(body.get("content"));
+        if (content == null || content.isBlank()) throw new BizException(400, "公告内容不能为空");
+        Notice n = new Notice();
+        n.setContent(content.trim());
+        n.setSortNo(intVal(body.get("sortNo"), 99));
+        n.setEnabled(true);
+        n.setCreatedAt(LocalDateTime.now());
+        noticeMapper.insert(n);
+        return ok(noticeMap(n));
+    }
+
+    @PutMapping("/notices/{id}")
+    public Map<String, Object> updateNotice(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Notice n = noticeMapper.selectById(id);
+        if (n == null) throw new BizException(404, "公告不存在");
+        if (body.containsKey("content")) n.setContent(str(body.get("content")));
+        if (body.containsKey("sortNo")) n.setSortNo(intVal(body.get("sortNo"), n.getSortNo()));
+        if (body.containsKey("enabled")) n.setEnabled(boolVal(body.get("enabled"), n.getEnabled()));
+        noticeMapper.updateById(n);
+        return ok(noticeMap(n));
+    }
+
+    @DeleteMapping("/notices/{id}")
+    public Map<String, Object> deleteNotice(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        if (noticeMapper.selectById(id) == null) throw new BizException(404, "公告不存在");
+        noticeMapper.deleteById(id);
+        return ok(id);
+    }
+
     // ==================== 小工具 ====================
 
     private String str(Object o) {
@@ -647,5 +1028,11 @@ public class AdminController {
         } catch (NumberFormatException e) {
             return fallback;
         }
+    }
+
+    private Boolean boolVal(Object o, Boolean fallback) {
+        if (o == null) return fallback;
+        if (o instanceof Boolean) return (Boolean) o;
+        return "1".equals(String.valueOf(o)) || "true".equalsIgnoreCase(String.valueOf(o));
     }
 }

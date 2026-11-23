@@ -137,6 +137,7 @@ public class DataInitializer implements ApplicationRunner {
             rev.setRating(BigDecimal.valueOf(((Number) rv[3]).doubleValue()));
             rev.setReviewDate(LocalDate.parse((String) rv[4]));
             rev.setContent((String) rv[5]);
+            rev.setStatus("approved");   // 种子评价直接通过审核，历史数据可见
             rev.setCreatedAt(LocalDateTime.now());
             reviewMapper.insert(rev);
         }

@@ -31,9 +31,11 @@ public class AttractionServiceImpl implements AttractionService {
     public List<Attraction> listWithReviews() {
         List<Attraction> list = attractionMapper.selectList(null);
         for (Attraction a : list) {
+            // 前台只展示审核通过的评价（pending / rejected 不对外）
             List<Review> reviews = reviewMapper.selectList(
                     new LambdaQueryWrapper<Review>()
                             .eq(Review::getAttractionId, a.getId())
+                            .eq(Review::getStatus, "approved")
                             .orderByDesc(Review::getReviewDate));
             a.setReviews(reviews);
             a.setRating(avgRating(reviews));
@@ -54,6 +56,7 @@ public class AttractionServiceImpl implements AttractionService {
         r.setAvatar(avatar == null || avatar.isBlank() ? generateAvatar(name) : avatar);
         r.setRating(rating);
         r.setContent(content);
+        r.setStatus("pending");           // 新评价需管理员审核通过后才会展示
         r.setReviewDate(LocalDate.now());
         r.setCreatedAt(LocalDateTime.now());
         reviewMapper.insert(r);

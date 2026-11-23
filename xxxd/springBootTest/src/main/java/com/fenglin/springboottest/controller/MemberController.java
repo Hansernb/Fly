@@ -7,7 +7,6 @@ import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.service.AuthService;
 import com.fenglin.springboottest.service.MemberService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,7 +32,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "http://192.168.68.47:5173")
 public class MemberController {
 
     private static final int LOG_LIMIT = 60;

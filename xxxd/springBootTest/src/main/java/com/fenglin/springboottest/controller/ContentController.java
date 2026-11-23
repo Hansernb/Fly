@@ -1,14 +1,18 @@
 package com.fenglin.springboottest.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fenglin.springboottest.entity.Banner;
 import com.fenglin.springboottest.entity.Habitat;
+import com.fenglin.springboottest.entity.Notice;
 import com.fenglin.springboottest.entity.Show;
 import com.fenglin.springboottest.entity.Ticket;
+import com.fenglin.springboottest.mapper.BannerMapper;
 import com.fenglin.springboottest.mapper.HabitatMapper;
+import com.fenglin.springboottest.mapper.NoticeMapper;
 import com.fenglin.springboottest.mapper.ShowMapper;
 import com.fenglin.springboottest.mapper.TicketMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,7 +28,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "http://192.168.68.47:5173")
 public class ContentController {
 
     @Autowired
@@ -33,6 +36,10 @@ public class ContentController {
     private ShowMapper showMapper;
     @Autowired
     private TicketMapper ticketMapper;
+    @Autowired
+    private BannerMapper bannerMapper;
+    @Autowired
+    private NoticeMapper noticeMapper;
 
     /** GET /api/habitats —— 森林栖息地列表 */
     @GetMapping("/habitats")
@@ -66,6 +73,41 @@ public class ContentController {
             m.put("name", s.getName());
             m.put("place", s.getPlace());
             m.put("tag", s.getTag());
+            list.add(m);
+        }
+        return ok(list);
+    }
+
+    /** GET /api/banners —— 首页轮播（仅上架，按 sort_no 排序），字段对齐前台 bannerSlides */
+    @GetMapping("/banners")
+    public Map<String, Object> banners() {
+        LambdaQueryWrapper<Banner> qw = new LambdaQueryWrapper<>();
+        qw.eq(Banner::getEnabled, true).orderByAsc(Banner::getSortNo, Banner::getId);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Banner b : bannerMapper.selectList(qw)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", b.getId());
+            m.put("img", b.getImg());
+            m.put("tag", b.getTag());
+            m.put("title", b.getTitle());
+            m.put("desc", b.getSubtitle());       // 前台字段名是 desc
+            m.put("link", b.getLink());
+            m.put("color", b.getColor());
+            list.add(m);
+        }
+        return ok(list);
+    }
+
+    /** GET /api/notices —— 顶部滚动公告（仅上架，按 sort_no 排序） */
+    @GetMapping("/notices")
+    public Map<String, Object> notices() {
+        LambdaQueryWrapper<Notice> qw = new LambdaQueryWrapper<>();
+        qw.eq(Notice::getEnabled, true).orderByAsc(Notice::getSortNo, Notice::getId);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Notice n : noticeMapper.selectList(qw)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", n.getId());
+            m.put("content", n.getContent());
             list.add(m);
         }
         return ok(list);
