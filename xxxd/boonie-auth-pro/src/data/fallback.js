@@ -16,6 +16,17 @@ export const FALLBACK_BANNERS = [
   { img: '/img/train.jpeg', tag: '🚂 全家同游', title: '小熊观光火车', desc: '慢悠悠绕园一圈，熊大熊二沿途陪你打招呼。' }
 ]
 
+/** 项目分类兜底（后端 /api/categories 不可达时使用，与 db-init.sql 种子一致） */
+export const FALLBACK_CATEGORIES = [
+  { name: '全部', emoji: '🎡', color: '#2f7d4f', sortNo: 0 },
+  { name: '刺激', emoji: '🎢', color: '#e4572e', sortNo: 1 },
+  { name: '亲子', emoji: '👨‍👩‍👧', color: '#ffb703', sortNo: 2 },
+  { name: '观光', emoji: '📷', color: '#7c5cbf', sortNo: 3 },
+  { name: '浪漫', emoji: '💕', color: '#e4572e', sortNo: 4 },
+  { name: '清凉', emoji: '🛶', color: '#2a9d8f', sortNo: 5 },
+  { name: '益智', emoji: '🧩', color: '#4caf6d', sortNo: 6 }
+]
+
 /** 顶部滚动公告兜底 */
 export const FALLBACK_NOTICES = [
   '🕘 开园时间：09:00 - 21:00（20:30 停止入园）',

@@ -176,6 +176,6 @@ if (fs.existsSync(distDir)) {
   app.get('*', (_req, res) => res.sendFile(join(distDir, 'index.html')))
 }
 
-app.listen(PORT, '192.168.68.33', () => {
-  console.log(`🐻 后端已启动: http://192.168.68.33:${PORT}（已持久化 ${users.length} 个用户）`)
+app.listen(PORT, '192.168.68.53', () => {
+  console.log(`🐻 后端已启动: http://192.168.68.53:${PORT}（已持久化 ${users.length} 个用户）`)
 })

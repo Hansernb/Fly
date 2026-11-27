@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { attractionsDB } from '../data/attractions'
-import { FALLBACK_IMG, FALLBACK_BANNERS, FALLBACK_NOTICES } from '../data/fallback'
-import { getAttractions, getBanners, getNotices } from '../api/content'
+import { FALLBACK_IMG, FALLBACK_BANNERS, FALLBACK_NOTICES, FALLBACK_CATEGORIES } from '../data/fallback'
+import { getAttractions, getBanners, getNotices, getCategories } from '../api/content'
 
 /**
  * 首页内容 store（attractions / banners / notices）
@@ -22,6 +22,8 @@ export const useContentStore = defineStore('content', {
     bannerSlides: [...FALLBACK_BANNERS],
     /** 顶部公告文本数组 */
     notices: [...FALLBACK_NOTICES],
+    /** 项目分类字典（后台可维护） */
+    categories: [...FALLBACK_CATEGORIES],
     /** 项目列表加载中 */
     loading: false,
     /** 降级提示文案（空字符串表示正常） */
@@ -34,7 +36,12 @@ export const useContentStore = defineStore('content', {
 
   getters: {
     /** 热门推荐：按评分取前 5 */
-    hotAttractions: (s) => [...s.attractions].sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 5)
+    hotAttractions: (s) => [...s.attractions].sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 5),
+    /** 分类名称列表（供筛选/下拉用，始终含「全部」） */
+    categoryNames: (s) => {
+      const names = s.categories.map((c) => c.name)
+      return names.includes('全部') ? names : ['全部', ...names]
+    }
   },
 
   actions: {
@@ -85,6 +92,20 @@ export const useContentStore = defineStore('content', {
         }))
       } catch {
         this.bannerSlides = [...FALLBACK_BANNERS]
+      }
+    },
+
+    /** 拉取项目分类字典，失败 / 空列表降级为内置分类 */
+    async loadCategories() {
+      try {
+        const json = await getCategories()
+        const list = json && Array.isArray(json.data) ? json.data : null
+        if (!list || !list.length) throw new Error('空列表')
+        this.categories = list
+          .map((c) => ({ name: c.name, emoji: c.emoji, color: c.color, sortNo: c.sortNo ?? 0 }))
+          .sort((a, b) => a.sortNo - b.sortNo)
+      } catch {
+        this.categories = [...FALLBACK_CATEGORIES]
       }
     },
 

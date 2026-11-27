@@ -7,7 +7,7 @@
 「熊出没 · 森林登录注册 Pro」：Vue 3 + Vite 前端，后端已切换为 **Java Spring Boot**（`../springBootTest`）。
 - 前端：Vite 开发服务器，端口 **5173**，`vite.config.js` 里 `open: true` 会自动开浏览器
 - 后端：`../springBootTest`（Spring Boot 3.4.5 + MyBatis-Plus + MySQL），端口 **8080**，详见 `../springBootTest/AI-CONTEXT.md`
-- 前端所有请求走相对路径 `/api/*`，由 Vite 代理转发到 `http://192.168.68.33:${backendPort}`（2026-11-23 全项目 IP 统一；原为 `localhost` / `192.168.68.47`）。`server.host: true` 绑 0.0.0.0，局域网 `http://192.168.68.33:5173` 可访问。**改 IP 前先确认本机持有该地址**，否则后端 `server.address` 绑定会失败
+- 前端所有请求走相对路径 `/api/*`，由 Vite 代理转发到 `http://192.168.68.53:${backendPort}`（2026-11-23 全项目 IP 统一；原为 `localhost` / `192.168.68.47`）。`server.host: true` 绑 0.0.0.0，局域网 `http://192.168.68.53:5173` 可访问。**改 IP 前先确认本机持有该地址**，否则后端 `server.address` 绑定会失败
   - **代理端口不是写死的**：`vite.config.js` 启动时扫描同级含 `pom.xml` 的后端目录，读其 `application.properties` 的 `spring.profiles.active`，再读对应 `application-{profile}.properties` 的 `server.port`（回退 8080）。后端改端口，前端代理自动跟随
 - `server/index.js` 是旧的 Express 假后端，**已弃用**（不再启动），仅作参考保留
 
@@ -116,6 +116,52 @@ npx vite
 
 **下一步优先级建议**
 1. `ParkHome.vue` **5036 行**（模板 878 + 脚本 966 + **样式 3188**）是最大技术债。拆分顺序应为：**先建 `stores/content.js` 承接 attractions/banners/notices 状态**，再把 13 个 `<section>`（搜索/hero/eco-bar/热门/搜索结果/项目/门票/游戏/风景/评价/data-cards/地图/详情弹窗）逐个抽到 `views/home/*`，每抽一块把对应 scoped 样式一起搬走
-2. App.vue 换成真正的 `<router-view>`，路由改回 `() => import()` 懒加载分包
-3. 后端补 `boonie_visit` 表 + 埋点接口，让看板「访客数」变成真实 PV/UV
-4. 把首页写死的分类标签迁到 `boonie_category` 表，后台可维护
+2. ~~App.vue 换成真正的 `<router-view>` + 懒加载分包~~ ✅ 已完成（2026-11-27，见下方「路由架构升级」）
+3. ~~后端补 `boonie_visit` 表 + 埋点接口~~ ✅ 已完成（2026-11-27，见下方「参考仓库借鉴」）
+4. ~~把首页写死的分类标签迁到 `boonie_category` 表~~ ✅ 已完成（2026-11-27）
+
+## 参考仓库借鉴改造（2026-11-27，方案见根目录 `MIGRATION_PLAN.md`）
+对照 `geeeeeeeek/java_travel` 与 `huzhushan/vue3-element-admin`，只复用结构/表设计/通用组件，熊出没主题配色与页面零变化。分 3 块完成并逐块验证：
+
+- **第 1 块 分类字典**：后端新增 `boonie_category` 表（7 条种子：全部/刺激/亲子/观光/浪漫/清凉/益智）+ `Category` 实体/Mapper + `GET /api/categories`（公开，仅启用按 sort_no）+ `/api/admin/categories` CRUD；前端 `api/content.js` 加 `getCategories`、`stores/content.js` 加 `categories` 状态与 `categoryNames` getter（兜底 `FALLBACK_CATEGORIES`）、`AttractionList.vue` 筛选按钮改读 store（onMounted 加载）、`AdminPanel.vue` 加「🏷️ 项目分类」模块。注：项目编辑的 tag 下拉仍是静态数组（改造风险低收益小，保留）
+- **第 2 块 访问统计**：后端新增 `boonie_visit` 表 + `Visit` 实体/Mapper + `VisitController`（`POST /api/visit` 记录 ip/date/page/ua，失败静默）；`AdminController.dashboard()` 的 `visitors` 改为 `max(埋点去重IP, 旧口径注册用户+游客手机号)`，`summary` 新增 `pv`，`trend` 每天新增 `pv`/真实 UV——取大值兼容埋点上线前历史数据。前端 `main.js` 用 sessionStorage(`boonie_visit_reported`) 每会话上报一次 `reportVisit()`，fire-and-forget
+- **第 3 块 401 统一拦截**：`utils/request.js` 加 `setUnauthorizedHandler(fn)` 全局处理器 + `skipUnauthorized` 选项；`main.js` 注册 handler（清会话+提示「登录已过期」）；`getMe()` 声明 `skipUnauthorized`（匿名探测不触发），ParkHome 既有 401 处理保留。默认无 handler 时行为完全不变，兼容所有裸 fetch 调用
+- 验证：`npm run build` 三块均通过；重启 8080 后 `/api/categories` 返回 7 条、后台接口无 token 401、`POST /api/visit` 写库 PV/UV=1、看板 `pv=1`；无头 Chrome 实测 `/`、`/attractions`、`/tickets` DOM 230KB+ 且零 JS 报错
+
+## 路由架构升级：App.vue → `<router-view>`（2026-11-27，参考 vue3-element-admin 的 router 分层）
+- **方案**：原 App.vue 的 10 路 `v-if` 链改为真正的 `<router-view>`；为保 UI 零变化，新增 `src/views/` 薄适配层（9 个 `*View.vue` + `useNav.js`），**原 17 个业务组件零改动**，由适配层承接原 App.vue 的 props 传递与 emit→导航映射
+- `src/views/useNav.js`：共享导航 composable，逐字复刻原 App.vue 的 `go`/`goHome`（history.state.back 优先后退）/`enterTickets`（带 ticketId）/`openAttractionDetail`（push('/')+CustomEvent）/`enterAdminLogin`/`onAdminLogin`/`exitAdmin`
+- 各 view：`HomeView`（未登录→ForestPanel+AuthCard，已登录→ParkHome，含原 auth-page 样式）、`AdminView`/`AdminLoginView`/`AttractionsView`/`MapView`/`TicketsView`（从 `route.query.ticketId` 读预选票种）/``GamesView`/`MemberView`/`ProfileView`/`NotFoundView`
+- `router/index.js`：`component` 全改为 `() => import('../views/XxxView.vue')` 懒加载；守卫（beforeEach/afterEach）与 9 条路径原样保留
+- `App.vue` 精简为：背景 `.bg-scene` + toast + `<router-view />` + onMounted 恢复登录态兜底
+- **收益**：主包从 309KB → **118KB**（gzip 46KB），10 个 view 各自分包按需加载
+- 验证：`npm run build` 零警告；无头 Chrome 逐路由实测 9 条路径全部命中各自特有文案、零 JS 报错；未登录访问 `/admin` 仍被守卫重定向到后台登录页
+- ⚠️ 改 view 适配层时注意：`ParkHome` 的 `emit('tickets', id)` 经 HomeView 转为 `query.ticketId`；`PersonalCenter` 的 `emit('attraction', id)` 经 ProfileView 转首页弹窗事件；`PersonalCenter` 的 `emit('member')` 经 ProfileView 转 `/member`（订单/积分真实入口）
+
+## 购票与会员中心完善（2026-11-27，参考 java_travel 订单/用户中心）
+- **现状核对结论**：购票 4 步流程（`TicketBooking.vue`：选票种→日期→数量→确认→生成订单）、下单自动开会员、积分规则（1元=1分、1分抵¥0.3、最多抵50%）、数据表（`boonie_ticket_order`/`boonie_member`/`boonie_point_log`）此前**均已完成**，对标 java_travel 的 `b_order`/`b_user` 字段齐全，本轮未改后端与表结构
+- **本轮唯一缺口**：真实订单列表没进会员中心（个人中心 `PersonalCenter.vue` 的订单/积分读的是 localStorage 假数据 `boonie_ticket_orders_v1`）
+- `api/content.js` 新增 `getOrders(token)` / `cancelOrder(orderNo, token)`（统一 request 层）
+- `MemberCenter.vue` 新增「🧾 我的订单」区块（登录态按账号拉 `GET /api/orders`）：订单号/状态徽章/票种/日期/数量/取票人/实付（原价划线）/积分抵扣与获得标签/取消按钮；取消调后端含积分回滚，成功后 `Promise.all([lookup(), loadOrders()])` 刷新会员卡与流水；新增 `.mc-order*` 系列样式
+- `PersonalCenter.vue` 的订单/积分 tab 改为引导卡片（`emit('member')` 跳会员中心），消除假数据矛盾；数据概览与徽章仍用本地统计（不影响）
+- 验证：`npm run build` 通过；后端实测 798分→申请800→实际用665（50%上限）→抵¥199.5→实付¥199.5得199分→余额332→取消回滚0，积分明细含获取/抵扣/退款/扣回；CDP 注入 token 实测 `/member` 登录态渲染出 3 笔真实订单 + 8 条积分流水，零 JS 报错
+
+## 中后台布局改造（2026-11-27，参考 vue3-element-admin layout + ProTable）
+- **新建独立 `src/admin/` 体系，旧 `components/AdminPanel.vue`（1787 行）保留未删但路由已不指向它**；`/admin` → `admin/layout/AdminLayout.vue`（嵌套路由），`/admin/:module` → `admin/views/CrudView.vue`（7 模块共用），`/admin` 默认重定向到 `projects`
+- 目录：`admin/config/modules.js`（7 模块的 columns/fields/seed 配置）、`admin/api/mock.js`（Mock CRUD）、`admin/components/{ProTable,FormDialog,Pagination}.vue`、`admin/layout/AdminLayout.vue`、`admin/views/CrudView.vue`
+- **7 个菜单 key**：projects 项目管理 / shows 演出管理 / tickets 门票管理 / orders 订单管理 / reviews 评价管理 / users 用户管理 / banners 轮播图管理。新增模块 = 在 `modules.js` 加一段配置 + seed
+- `ProTable`：columns 配置（key/label/width/type/format）、type=status/statusBool/color/switch 内置渲染、`#cell-xxx` 槽位覆盖、多选、`#actions` 操作槽位
+- `FormDialog`：fields schema（type=text/textarea/number/date/color/select/switch）、required 校验、options/optionLabels
+- `Pagination`：v-model:page/pageSize + change 事件，页码省略号
+- `mock.js`：`listModule/createRow/updateRow/deleteRow/toggleRow/resetModule`，localStorage key `boonie_admin_mock_<模块>`，220ms 延迟。**接 Springboot 时只改 mock.js 函数体为 request() 即可，页面零改动**
+- 守卫不变：`/admin` 无 `boonie_admin_token` → `/admin/login`；退出登录 `store.exitAdmin()` 清 token 跳登录页
+- ⚠️ 未引入 Element Plus / i18n / 工作流 / 富文本（沿用项目原生 Vue + 熊出没 CSS 变量）
+- 验证：`npm run build` 通过；CDP 注入管理员 token 实测 7 菜单标题/面包屑/高亮/表格数据全对、零 JS 报错；新增（5→6 行 + 成功提示）、搜索命中、退出清 token 均通过
+
+## 熊大快跑（独立 Canvas 跑酷组件，2026-11-27 新增）
+- `src/components/BearRunner.vue`：单文件原生 Canvas 跑酷，逻辑抽自 GitHub Topic `endless-runner`（CursedPrograms/endless-runner-html、amoldalwai/Chrome_Dino_Game）——rAF 循环 + 重力跳跃（空格/↑/点击，GRAVITY 0.72 / JUMP_V 12.6）+ 障碍数组 + AABB 碰撞 + 计分加速 + localStorage 最高分
+- 玩法：熊大固定 x=118 自动跑，跳过树桩（障碍后 7 成概率放蜂蜜罐），蜂蜜 +10 分，每躲一个障碍 +1 分并加速（5→11），撞树桩结束；最高双写 `boonie_bear_runner_best_v1` 与统一 `boonie_game_best_v1.bearRunner`
+- 配色：暖绿 + 暖黄（天空 #fff1c9→#dff0c4、草地 #7cc65b、围巾 #2f7d4f、蜂蜜 #ffb703），沿用主题变量
+- `ForestGames.vue` 接入为第 6 款游戏（id `bearRunner`）：大厅卡片 + 舞台 `<BearRunner>` + HUD/最佳分同步 + 登录后成绩上报；原有 5 款游戏逻辑零改动
+- ⚠️ 关键坑：障碍生成倒计时必须按 `dt` 时间步进（`spawnIn -= dt`），不能按帧 `--spawnIn`，否则高刷新率下障碍爆发式生成
+- 验证：`npm run build` 通过；CDP 智能按障碍距离起跳实测单局 48 分（8 障碍 + 4 蜂蜜）、新纪录提示、双 localStorage 写入、HUD 三处同步，零 JS 报错

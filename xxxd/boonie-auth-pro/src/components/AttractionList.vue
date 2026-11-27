@@ -7,10 +7,10 @@
       <p class="sub">狗熊岭森林游乐园 · 全部热门项目一目了然</p>
     </header>
 
-    <!-- 分类筛选（刺激 / 亲子 / 观光） -->
+    <!-- 分类筛选（后台分类字典，接口失败降级为内置分类） -->
     <div class="filters">
       <button
-        v-for="c in categories"
+        v-for="c in categoryNames"
         :key="c"
         type="button"
         class="chip"
@@ -102,13 +102,19 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { attractionsDB } from '../data/attractions.js'
+import { useContentStore } from '../stores/content'
 import AttractionDetail from './AttractionDetail.vue'
 
 const emit = defineEmits(['back'])
 
-const categories = ['全部', '刺激', '亲子', '观光']
+// 分类筛选从内容 store 读取（后台可维护，接口失败自动降级为内置分类）
+const contentStore = useContentStore()
+const { categoryNames } = storeToRefs(contentStore)
+onMounted(() => contentStore.loadCategories())
+
 const cat = ref('全部')
 const selectedId = ref(null)
 

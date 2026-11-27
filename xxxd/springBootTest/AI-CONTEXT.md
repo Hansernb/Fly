@@ -22,7 +22,7 @@
 2. **数据库不存在**：`Unknown database 'boonie_auth'` → 跑一遍 `db-init.sql` 即可，表结构见脚本。
 3. **MySQL 客户端路径**：`C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`（PATH 里没有 mysql）。
 4. **系统环境**：JDK 21（项目要求 17+，兼容）、无系统 mvn（必须用项目自带 mvnw.cmd）、MySQL 是 Windows 服务。
-5. **局域网 IP 统一为 `192.168.68.33`（2026-11-23 全项目替换，原 `192.168.68.47`）**：目前 IP 只出现在 **2 个必要位置**——`application-dev.properties` 的 `server.address`、前端 `vite.config.js` 的 `/api` 代理目标（另有已弃用的 `server/index.js` 监听地址同步改了）。**8 个 Controller 上写死来源的 `@CrossOrigin(origins=...)` 已全部删除**，CORS 改由 `AppConfig` 全局单点管理（见下方 CORS 条），换 IP 不再需要改任何 Java 文件。**改 IP 前先用 `ipconfig` 确认本机确实持有该地址**——`server.address` 绑定一个本机没有的 IP 会导致 Tomcat 启动直接失败（"Cannot assign requested address"）。本机当前 IPv4 为 `192.168.68.33`（另有 192.168.55.1 / 192.168.137.1 / 172.26.48.1 虚拟网卡）。
+5. **局域网 IP 统一为 `192.168.68.53`（2026-11-23 全项目替换，原 `192.168.68.47`）**：目前 IP 只出现在 **2 个必要位置**——`application-dev.properties` 的 `server.address`、前端 `vite.config.js` 的 `/api` 代理目标（另有已弃用的 `server/index.js` 监听地址同步改了）。**8 个 Controller 上写死来源的 `@CrossOrigin(origins=...)` 已全部删除**，CORS 改由 `AppConfig` 全局单点管理（见下方 CORS 条），换 IP 不再需要改任何 Java 文件。**改 IP 前先用 `ipconfig` 确认本机确实持有该地址**——`server.address` 绑定一个本机没有的 IP 会导致 Tomcat 启动直接失败（"Cannot assign requested address"）。本机当前 IPv4 为 `192.168.68.53`（另有 192.168.55.1 / 192.168.137.1 / 172.22.144.1 虚拟网卡）。
 6. **AI 沙箱会注入 `SERVER__PORT`（双下划线）等环境变量**：用 `mvnw spring-boot:run` 裸启动会被松散绑定劫持到随机端口（如 59677）。`start.bat` 已用显式 `--server.port=%BE_PORT%` 覆盖；AI 命令行验证时须先 `Remove-Item Env:SERVER__PORT` 并同样传 `--server.port=8080`。
 
 ## 快速验证清单
@@ -124,7 +124,7 @@
 - 取消订单：`cancel` 调 `memberService.rollback`（抵扣积分全额退还只回余额；赚取积分扣回，余额与 cum_points 一起回退）
 - ⚠️ **会员模块文件曾整体丢失**（2026-11-11 编译报 `找不到符号 Member / MemberService`）：若再次出现，检查 `entity/Member`、`entity/PointLog`、`mapper/MemberMapper`、`mapper/PointLogMapper`、`service/(impl/)MemberService*`、`controller/MemberController` 是否缺失，别去改 TicketOrderController
 - 游戏成绩 `GAME_NAMES` 白名单已含 `run`（森林跑酷）
-- **CORS（重要，2026-11-23 已收敛为单点）**：浏览器对同源 POST fetch 也会带 Origin 头，旧的 `@CrossOrigin(origins="写死某IP:5173")` 在前端换端口/换主机（localhost、127.0.0.1、局域网 IP）时报 403 "Invalid CORS request"（curl 不带 Origin 测不出）。现由 `config/AppConfig.java` 全局 `addMapping("/api/**").allowedOriginPatterns("*")` **统一单点管理，8 个 Controller 上冗余的 `@CrossOrigin` 注解已全部删除**。实测 localhost:5173 / 127.0.0.1:5173 / 192.168.68.33:5173 / localhost:5174 预检全部 200。**勿再给 Controller 加写死来源的 @CrossOrigin**（会覆盖全局配置、且换 IP 又要改 8 处 Java 文件）
+- **CORS（重要，2026-11-23 已收敛为单点）**：浏览器对同源 POST fetch 也会带 Origin 头，旧的 `@CrossOrigin(origins="写死某IP:5173")` 在前端换端口/换主机（localhost、127.0.0.1、局域网 IP）时报 403 "Invalid CORS request"（curl 不带 Origin 测不出）。现由 `config/AppConfig.java` 全局 `addMapping("/api/**").allowedOriginPatterns("*")` **统一单点管理，8 个 Controller 上冗余的 `@CrossOrigin` 注解已全部删除**。实测 localhost:5173 / 127.0.0.1:5173 / 192.168.68.53:5173 / localhost:5174 预检全部 200。**勿再给 Controller 加写死来源的 @CrossOrigin**（会覆盖全局配置、且换 IP 又要改 8 处 Java 文件）
 
 ## 后台数据看板 + 轮播/公告/评价审核/用户 CRUD（2026-11-23 新增）
 - `db-init.sql` 幂等新增：`boonie_banner`（轮播图）、`boonie_notice`（公告）；`boonie_review` 加 `status` 列（pending/approved/rejected，存量默认 approved）；两张表各有 4 条 / 3 条种子。**必须跑 db-init.sql（start.bat 每次启动会自动跑）新表才存在**，否则 `/api/banners`、`/api/notices`、看板会 500
@@ -137,3 +137,17 @@
 - **轮播/公告后台 CRUD**：`/api/admin/banners`、`/api/admin/notices` 各支持 GET/POST/PUT{id}/DELETE{id}；PUT 支持 `enabled` 上下架（boolVal 兼容 "true"/1）。前台公开接口 `GET /api/banners`、`GET /api/notices`（ContentController，仅 enabled、按 sort_no 排序）
 - **用户 CRUD 补全**：`POST /api/admin/users` 新增（name/email/password≥6/permission/avatar，校验 name+email 唯一）、`DELETE /api/admin/users/{id}`（禁止删自己，先解绑 member.user_id）、`PUT /api/admin/users/{id}` 新增支持 name/email（唯一校验）
 - 注意 `AdminController` 里订单 Mapper 字段名是 `ticketOrderMapper`（不是 orderMapper）；`Member` 相关解绑用到 `memberMapper`
+
+## 参考仓库借鉴改造（2026-11-27，方案见根目录 `../MIGRATION_PLAN.md`）
+对照 `geeeeeeeek/java_travel` 新增两块，**只复用表设计/分层，未复制业务代码**：
+
+- **分类字典**（借鉴 `b_classification`）：`db-init.sql` 新增 `boonie_category` 表（7 条幂等种子）；`entity/Category` + `mapper/CategoryMapper`；`ContentController` 加 `GET /api/categories`（公开，仅 enabled、按 sort_no）；`AdminController` 加 `/api/admin/categories` 的 GET/POST/PUT{id}/DELETE{id}（管理员鉴权，重名 400）。前端 `AttractionList` 筛选已改读此接口
+- **访问统计**（借鉴 `b_op_log`/`VisitData`）：`db-init.sql` 新增 `boonie_visit` 表（ip/visit_date/visit_time/page/user_agent，索引 date+ip）；`entity/Visit` + `mapper/VisitMapper` + `VisitController`（`POST /api/visit` 公开埋点，X-Forwarded-For→X-Real-IP→RemoteAddr 取 IP，UA 截 255，异常静默）。`dashboard()`：`summary.visitors = max(埋点去重IP, 用户数+游客手机号)`、新增 `summary.pv`；`trend[]` 每天新增 `pv` 与真实 UV，取大值兼容历史。前端 `main.js` 每会话上报一次
+- ⚠️ 改后端 Java 需重启 8080（`Stop-Process -Id <pid> -Force` 后 `mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=8080`，先 `unset SERVER_PORT SERVER__PORT`）；curl 测试本机须加 `--noproxy '*'` 否则走系统代理返回 502
+
+## 购票/订单/积分体系（2026-11-27 核对，对标 java_travel `b_order`/`b_user`，本轮未改后端）
+- **已有实现，勿重复造轮子**：`TicketOrderController.create()` 已做「票种按库重算价格、下单自动建会员（登录按 user_id / 游客按手机号）、积分抵扣（1分=¥0.3、最多50%）、实付1元=1积分、写积分流水」；`/orders/{no}/cancel` 已含积分回滚（退抵扣+扣回赠送，等级回落）；`MemberServiceImpl` 的 `maxDeductible/discountOf/earnedOf/record/rollback` 规则完整
+- 数据表：`boonie_ticket_order`（订单号/用户/票种快照/数量/原价/实付/积分抵扣与获得/状态）、`boonie_member`（user_id 绑定+total_points+cum_points+level）、`boonie_point_log`（获取/抵扣/退款/扣回流水），字段已按项目调整齐全
+- 测试账号：熊二=`bear123456`（permission=1，普通用户）；熊大=`bear123456`（permission=0，管理员）
+- 本轮前端把真实订单列表接入 `MemberCenter.vue`（`GET /api/orders`），个人中心的订单/积分 tab 改为引导跳会员中心；后端接口无需改动
+- 实测规则值：买¥798得798分；再买¥399申请用800分→实际用665分（399×50%÷0.3 向下取整）抵¥199.5→实付¥199.5得199分→余额332；取消后积分全回滚

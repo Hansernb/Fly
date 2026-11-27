@@ -100,6 +100,64 @@
         <div class="mc-rule"><b>自动升级</b><span>500 白银 / 2000 黄金</span></div>
       </section>
 
+      <!-- 我的订单（登录态按账号拉取真实订单） -->
+      <section v-if="loggedIn" class="mc-orders">
+        <div class="mc-logs-head">
+          <h2>🧾 我的订单</h2>
+          <span class="mc-logs-count">
+            <button class="mc-refresh" type="button" :disabled="ordersLoading" @click="loadOrders">
+              {{ ordersLoading ? '加载中…' : '↻ 刷新' }}
+            </button>
+            {{ orders.length }} 笔
+          </span>
+        </div>
+        <div v-if="orders.length" class="mc-order-list">
+          <article
+            v-for="o in orders"
+            :key="o.id"
+            class="mc-order"
+            :class="{ 'is-canceled': o.status === '已取消' }"
+          >
+            <div class="mc-order-top">
+              <span class="mc-order-no">#{{ o.id }}</span>
+              <span class="mc-order-status" :class="statusClass(o.status)">{{ o.status }}</span>
+            </div>
+            <div class="mc-order-main">
+              <span class="mc-order-emoji">{{ o.emoji || '🎫' }}</span>
+              <div class="mc-order-info">
+                <b>{{ o.ticketName }}</b>
+                <span>{{ o.date }} · {{ o.quantity }} 张 · {{ o.buyerName }}</span>
+              </div>
+              <div class="mc-order-money">
+                <b>¥{{ o.total }}</b>
+                <s v-if="Number(o.pointsDiscount) > 0">¥{{ o.grossAmount }}</s>
+              </div>
+            </div>
+            <div class="mc-order-foot">
+              <span v-if="Number(o.pointsUsed) > 0" class="mc-order-tag">
+                🎫 积分抵扣 {{ o.pointsUsed }}（−¥{{ o.pointsDiscount }}）
+              </span>
+              <span v-if="Number(o.pointsEarned) > 0" class="mc-order-tag honey">
+                🍯 获得 {{ o.pointsEarned }} 积分
+              </span>
+              <span class="mc-order-time">{{ o.createdAt }}</span>
+              <button
+                v-if="o.status === '待使用'"
+                class="mc-order-cancel"
+                type="button"
+                :disabled="cancelingNo === o.id"
+                @click="cancelMyOrder(o)"
+              >{{ cancelingNo === o.id ? '取消中…' : '取消订单' }}</button>
+            </div>
+          </article>
+        </div>
+        <div v-else-if="!ordersLoading" class="mc-empty">
+          🧾 还没有订单，去挑一张门票开启森林之旅吧～
+          <button class="mc-cta sm" type="button" @click="emit('tickets')">🎫 去订票</button>
+        </div>
+        <div v-else class="mc-empty">⏳ 正在加载订单…</div>
+      </section>
+
       <!-- 积分明细 -->
       <section v-if="member" class="mc-logs">
         <div class="mc-logs-head">
@@ -164,6 +222,7 @@ import {
   decorate,
   loadLocalMember
 } from '../data/member.js'
+import { getOrders, cancelOrder } from '../api/content.js'
 
 const props = defineProps({
   token: { type: String, default: '' },
@@ -183,6 +242,47 @@ const nicknameDraft = ref('')
 const saving = ref(false)
 const toast = ref('')
 let toastTimer = null
+
+/* ---------- 我的订单（后端真实订单，替代原个人中心的本地假数据） ---------- */
+const orders = ref([])
+const ordersLoading = ref(false)
+const cancelingNo = ref('')
+
+function statusClass(s) {
+  if (s === '待使用') return 'active'
+  if (s === '已使用') return 'used'
+  if (s === '已取消') return 'canceled'
+  return ''
+}
+
+async function loadOrders() {
+  if (!loggedIn.value || !props.token) return
+  ordersLoading.value = true
+  try {
+    const json = await getOrders(props.token)
+    orders.value = Array.isArray(json?.data) ? json.data : []
+  } catch {
+    orders.value = []
+  } finally {
+    ordersLoading.value = false
+  }
+}
+
+async function cancelMyOrder(o) {
+  if (cancelingNo.value) return
+  cancelingNo.value = o.id
+  try {
+    const json = await cancelOrder(o.id, props.token)
+    o.status = '已取消'
+    showToast(json?.message || '订单已取消，积分已同步回滚')
+    // 积分已回滚，刷新会员卡与积分明细
+    await Promise.all([lookup(), loadOrders()])
+  } catch (e) {
+    showToast(e?.message || '取消失败，请稍后重试')
+  } finally {
+    cancelingNo.value = ''
+  }
+}
 
 const phoneInputOk = computed(() => /^1\d{10}$/.test(phoneInput.value))
 /** 是否已登录：登录后积分跟账号走，不再按手机号查 */
@@ -322,9 +422,10 @@ async function saveProfile(patch) {
 }
 
 onMounted(() => {
-  // 已登录：直接按账号拉会员卡（换成别的手机号买票，积分仍记在同一张卡上）
+  // 已登录：直接按账号拉会员卡 + 真实订单（换成别的手机号买票，积分仍记在同一张卡上）
   if (loggedIn.value) {
     lookup()
+    loadOrders()
     return
   }
   try {
@@ -711,6 +812,165 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 700;
   color: var(--muted);
+}
+
+/* 我的订单 */
+.mc-orders {
+  background: rgba(255, 251, 240, 0.97);
+  border: 2px solid var(--wood-light);
+  border-radius: 22px;
+  padding: 16px 18px 18px;
+  box-shadow: 0 16px 36px -26px rgba(31, 92, 57, 0.7);
+  margin-bottom: 18px;
+}
+.mc-refresh {
+  border: none;
+  background: rgba(47, 125, 79, 0.1);
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+.mc-refresh:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.mc-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.mc-order {
+  background: #fffdf7;
+  border: 2px solid rgba(200, 155, 99, 0.28);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.mc-order.is-canceled {
+  opacity: 0.62;
+}
+.mc-order-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.mc-order-no {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.mc-order-status {
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.mc-order-status.active {
+  background: rgba(76, 175, 109, 0.16);
+  color: var(--forest);
+}
+.mc-order-status.used {
+  background: rgba(47, 125, 79, 0.14);
+  color: var(--forest-deep);
+}
+.mc-order-status.canceled {
+  background: rgba(140, 160, 180, 0.2);
+  color: #6b7785;
+}
+.mc-order-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mc-order-emoji {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  border-radius: 11px;
+  background: rgba(255, 183, 3, 0.16);
+}
+.mc-order-info {
+  flex: 1;
+  min-width: 0;
+}
+.mc-order-info b {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+}
+.mc-order-info span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.mc-order-money {
+  text-align: right;
+  flex: 0 0 auto;
+}
+.mc-order-money b {
+  display: block;
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--forest-deep);
+}
+.mc-order-money s {
+  font-size: 10px;
+  color: var(--muted);
+}
+.mc-order-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(200, 155, 99, 0.4);
+}
+.mc-order-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--forest);
+  background: rgba(76, 175, 109, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.mc-order-tag.honey {
+  color: #a9740a;
+  background: rgba(255, 183, 3, 0.18);
+}
+.mc-order-time {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-left: auto;
+}
+.mc-order-cancel {
+  border: 1px solid rgba(200, 155, 99, 0.6);
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mc-order-cancel:hover {
+  border-color: #d98600;
+  color: #d98600;
+}
+.mc-order-cancel:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 /* 明细 */

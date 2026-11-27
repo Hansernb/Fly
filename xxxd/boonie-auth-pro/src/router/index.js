@@ -4,44 +4,38 @@ import { useSessionStore } from '../stores/session'
 /**
  * 路由表
  *
- * 迁移说明：原 App.vue 用 ROUTES 数组 + viewOfPath() + popstate 手写路由，
- * 现改为 vue-router；路径与原来完全一致，旧链接/收藏夹不会失效。
- *
- * 注：这里用同步 import 而非 () => import()，原因是当前阶段由 App.vue 的 v-if 链
- * 负责实际渲染（渐进式迁移，保证 UI 零变化），组件已被 App.vue 静态引入，
- * 再用懒加载只会产生「同时被静态与动态引入」的分包警告。待第二步把 App.vue
- * 改为真正的 router-view 架构时，再把这里换成懒加载以获得分包收益。
+ * 2026-11-27 架构升级：App.vue 已从 v-if 链改为真正的 <router-view>，
+ * 每条路由指向 src/views/ 下的薄适配层（承接原 App.vue 的 props 传递与 emit 导航），
+ * 并改用 () => import() 懒加载分包，获得按需加载收益。路径与旧版完全一致。
  */
-import ParkHome from '../components/ParkHome.vue'
-import AdminLogin from '../components/AdminLogin.vue'
-import AdminPanel from '../components/AdminPanel.vue'
-import AttractionList from '../components/AttractionList.vue'
-import ParkMap from '../components/ParkMap.vue'
-import TicketBooking from '../components/TicketBooking.vue'
-import ForestGames from '../components/ForestGames.vue'
-import MemberCenter from '../components/MemberCenter.vue'
-import PersonalCenter from '../components/PersonalCenter.vue'
-import NotFound from '../components/NotFound.vue'
-
 const routes = [
-  { path: '/', name: 'home', component: ParkHome, meta: { title: '狗熊岭森林游乐园' } },
-  { path: '/admin/login', name: 'adminLogin', component: AdminLogin, meta: { title: '后台登录' } },
+  { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { title: '狗熊岭森林游乐园' } },
+  { path: '/admin/login', name: 'adminLogin', component: () => import('../views/AdminLoginView.vue'), meta: { title: '后台登录' } },
   {
     path: '/admin',
     name: 'admin',
-    component: AdminPanel,
-    meta: { title: '后台管理', requiresAdmin: true }
+    component: () => import('../admin/layout/AdminLayout.vue'),
+    redirect: { name: 'adminModule', params: { module: 'projects' } },
+    meta: { title: '后台管理', requiresAdmin: true },
+    children: [
+      {
+        path: ':module',
+        name: 'adminModule',
+        component: () => import('../admin/views/CrudView.vue'),
+        meta: { title: '后台管理' }
+      }
+    ]
   },
-  { path: '/attractions', name: 'attractions', component: AttractionList, meta: { title: '游乐项目' } },
-  { path: '/map', name: 'map', component: ParkMap, meta: { title: '园区地图' } },
-  { path: '/tickets', name: 'tickets', component: TicketBooking, meta: { title: '门票预订' } },
-  { path: '/games', name: 'games', component: ForestGames, meta: { title: '森林小游戏' } },
-  { path: '/member', name: 'member', component: MemberCenter, meta: { title: '会员中心' } },
-  { path: '/profile', name: 'profile', component: PersonalCenter, meta: { title: '个人中心' } },
+  { path: '/attractions', name: 'attractions', component: () => import('../views/AttractionsView.vue'), meta: { title: '游乐项目' } },
+  { path: '/map', name: 'map', component: () => import('../views/MapView.vue'), meta: { title: '园区地图' } },
+  { path: '/tickets', name: 'tickets', component: () => import('../views/TicketsView.vue'), meta: { title: '门票预订' } },
+  { path: '/games', name: 'games', component: () => import('../views/GamesView.vue'), meta: { title: '森林小游戏' } },
+  { path: '/member', name: 'member', component: () => import('../views/MemberView.vue'), meta: { title: '会员中心' } },
+  { path: '/profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { title: '个人中心' } },
   {
     path: '/:pathMatch(.*)*',
     name: 'notfound',
-    component: NotFound,
+    component: () => import('../views/NotFoundView.vue'),
     meta: { title: '页面走丢了' }
   }
 ]

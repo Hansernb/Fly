@@ -28,10 +28,16 @@ export const getHabitats = () => request('/habitats')
 /** 演出场次 */
 export const getShows = () => request('/shows')
 
+/** 项目分类字典（后台可维护，前端筛选/标签下拉共用） */
+export const getCategories = () => request('/categories')
+
+/** 访问埋点：每个浏览器会话上报一次，供后台看板统计真实 PV/UV */
+export const reportVisit = (page) => request('/visit', { method: 'POST', body: { page } })
+
 /* ===================== 账号 / 头像 ===================== */
 
-/** 当前登录用户（用于校验 token 是否仍有效） */
-export const getMe = (token) => request('/me', { token })
+/** 当前登录用户（用于校验 token 是否仍有效）；401 由调用方自行处理，不触发全局拦截 */
+export const getMe = (token) => request('/me', { token, skipUnauthorized: true })
 
 /** 上传头像文件（FormData） */
 export const uploadAvatar = (formData, token) =>
@@ -39,3 +45,12 @@ export const uploadAvatar = (formData, token) =>
 
 /** 更新当前用户头像地址 */
 export const updateMyAvatar = (avatar, token) => request('/me/avatar', { method: 'PUT', body: { avatar }, token })
+
+/* ===================== 门票订单 ===================== */
+
+/** 我的订单列表（需登录） */
+export const getOrders = (token) => request('/orders', { token })
+
+/** 取消订单（含积分回滚，需登录） */
+export const cancelOrder = (orderNo, token) =>
+  request(`/orders/${encodeURIComponent(orderNo)}/cancel`, { method: 'POST', token })

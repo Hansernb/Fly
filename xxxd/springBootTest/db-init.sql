@@ -419,6 +419,49 @@ INSERT IGNORE INTO `boonie_notice` (`id`, `content`, `sort_no`, `enabled`) VALUE
 (2, '☀️ 今日天气：晴 12~22°C，紫外线偏强，请注意防晒', 2, 1),
 (3, '📌 临时通知：「树洞过山车」11月23日例行检修，暂停开放一天，敬请谅解', 3, 1);
 
+-- =============================================================
+-- 分类字典表（借鉴 java_travel 的 b_classification）
+-- 用途：项目列表页「刺激/亲子/观光」筛选 + 后台项目编辑「标签」下拉
+-- 统一由本表维护，前台读库，后台可增删改（enabled 控制是否展示）
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `boonie_category` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(32) NOT NULL COMMENT '分类名称（如 刺激/亲子/观光）',
+  `emoji` varchar(16) DEFAULT NULL COMMENT '分类图标（可选）',
+  `color` varchar(16) DEFAULT NULL COMMENT '分类主题色（可选）',
+  `sort_no` int NOT NULL DEFAULT 0 COMMENT '展示顺序，越小越靠前',
+  `enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否启用：1 启用 0 停用',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `uk_category_name`(`name`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- 种子分类（对齐原前端写死的 5 个标签 + 3 个筛选类，INSERT IGNORE 幂等）
+INSERT IGNORE INTO `boonie_category` (`id`, `name`, `emoji`, `color`, `sort_no`, `enabled`) VALUES
+(1, '全部', '🎡', '#2f7d4f', 0, 1),
+(2, '刺激', '🎢', '#e4572e', 1, 1),
+(3, '亲子', '👨‍👩‍👧', '#ffb703', 2, 1),
+(4, '观光', '📷', '#7c5cbf', 3, 1),
+(5, '浪漫', '💕', '#e4572e', 4, 1),
+(6, '清凉', '🛶', '#2a9d8f', 5, 1),
+(7, '益智', '🧩', '#4caf6d', 6, 1);
+
+-- =============================================================
+-- 访问统计表（借鉴 java_travel 的 b_op_log / VisitData）
+-- 用途：记录每次前台访问，看板据此计算真实 PV/UV
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `boonie_visit` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `ip` varchar(64) NOT NULL COMMENT '访问者 IP',
+  `visit_date` date NOT NULL COMMENT '访问日期（便于按天聚合）',
+  `visit_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '访问时间',
+  `page` varchar(128) DEFAULT NULL COMMENT '访问路径（如 /、/attractions）',
+  `user_agent` varchar(255) DEFAULT NULL COMMENT '浏览器标识（UV 辅助判断）',
+  PRIMARY KEY (`id`),
+  INDEX `idx_visit_date`(`visit_date`),
+  INDEX `idx_visit_ip`(`ip`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
-SELECT 'db-init.sql 执行完成（用户/栖息地/演出/门票/订单/成绩/轮播/公告 已就绪）' AS `result`;
+SELECT 'db-init.sql 执行完成（用户/栖息地/演出/门票/订单/成绩/轮播/公告/分类/访问统计 已就绪）' AS `result`;

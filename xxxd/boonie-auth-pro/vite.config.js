@@ -53,11 +53,11 @@ const backendPort = resolveBackendPort()
 export default defineConfig({
   plugins: [vue()],
   server: {
-    host: true, // 绑定 0.0.0.0：localhost / 127.0.0.1 / 192.168.68.33 等多个地址都能访问
+    host: true, // 绑定 0.0.0.0：localhost / 127.0.0.1 / 192.168.68.53 等多个地址都能访问
     port: 5173,
     open: true,
     proxy: {
-      '/api': `http://192.168.68.33:${backendPort}`
+      '/api': `http://192.168.68.53:${backendPort}`
     }
   }
 })

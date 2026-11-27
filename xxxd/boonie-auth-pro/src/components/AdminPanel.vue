@@ -432,6 +432,20 @@ const SECTIONS = [
     seed: []
   },
   {
+    key: 'categories',
+    name: '项目分类',
+    icon: '🏷️',
+    desc: '维护「游乐项目」页的分类筛选与标签下拉（数据库 boonie_category），前台实时生效',
+    api: '/api/admin/categories',
+    columns: [
+      { key: 'name', label: '分类名称', type: 'text' },
+      { key: 'emoji', label: '图标', type: 'text' },
+      { key: 'color', label: '主题色', type: 'color' },
+      { key: 'sortNo', label: '排序', type: 'number' }
+    ],
+    seed: []
+  },
+  {
     key: 'reviews',
     name: '评价审核',
     icon: '✅',

@@ -16,7 +16,7 @@ public class AppConfig implements WebMvcConfigurer {
     /**
      * 全局 CORS 单点管理（各 Controller 不再写 @CrossOrigin）。
      * 浏览器对同源 POST 也会携带 Origin 头，来源可能是 localhost:5173 / 127.0.0.1:5174 /
-     * 局域网 IP 192.168.68.33:5173 等，端口或主机一变就可能被 403 Invalid CORS request 拒掉。
+     * 局域网 IP 192.168.68.53:5173 等，端口或主机一变就可能被 403 Invalid CORS request 拒掉。
      * 这里统一放行所有来源（令牌走 Authorization 头、不用 Cookie，无 CSRF 风险），
      * 换 IP / 换端口无需改动任何 Java 文件。
      */

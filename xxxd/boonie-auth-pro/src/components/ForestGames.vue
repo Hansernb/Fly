@@ -8,7 +8,7 @@
     <header class="gp-nav">
       <button class="gp-back" type="button" @click="emit('back')">← 返回上一页</button>
       <div class="gp-brand">🎮 森林小游戏中心</div>
-      <div class="gp-record">最高分：接蜂蜜 {{ best.honey }} / 打松鼠 {{ best.mole }} / 跑酷 {{ best.run }} / 翻牌 {{ best.match }} 步</div>
+      <div class="gp-record">最高分：熊大快跑 {{ best.bearRunner }} / 接蜂蜜 {{ best.honey }} / 打松鼠 {{ best.mole }} / 跑酷 {{ best.run }} / 翻牌 {{ best.match }} 步</div>
     </header>
 
     <main class="gp-main">
@@ -17,8 +17,9 @@
         <div class="lobby-hero">
           <span class="lh-badge">🍯 狗熊岭限定</span>
           <h1>森林小游戏中心</h1>
-          <p>五款手绘小游戏，随手玩一局，看看你能拿多少分～</p>
+          <p>六款手绘小游戏，随手玩一局，看看你能拿多少分～</p>
           <div class="lh-chips">
+            <span class="lh-chip">🐻 最佳 熊大快跑 {{ best.bearRunner }} 分</span>
             <span class="lh-chip">🏃 最佳 森林跑酷 {{ best.run }} 分</span>
             <span class="lh-chip">🍯 最佳 接蜂蜜 {{ best.honey }} 分</span>
             <span class="lh-chip">🐿️ 最佳 打松鼠 {{ best.mole }} 分</span>
@@ -70,7 +71,7 @@
               <span class="hud-v">{{ hudScore }}</span>
             </div>
             <div class="hud-item">
-              <span class="hud-k">{{ active === 'match' ? '用时' : active === 'run' ? '蜂蜜罐' : '剩余' }}</span>
+              <span class="hud-k">{{ active === 'match' ? '用时' : (active === 'run' || active === 'bearRunner') ? '蜂蜜罐' : '剩余' }}</span>
               <span class="hud-v">{{ hudTime }}</span>
             </div>
             <div class="hud-item best">
@@ -124,6 +125,19 @@
           <p class="stage-hint">
             空格 / ↑ 跳跃（可二段跳），↓ 滑铲躲树枝；手机点击屏幕跳跃。蜂蜜罐、松果 +10 分，金色盾牌 5 秒无敌！
           </p>
+        </div>
+
+        <!-- 熊大快跑：独立组件（原生 Canvas 经典跑酷） -->
+        <div v-else-if="active === 'bearRunner'" class="board-wrap">
+          <BearRunner
+            ref="bearRunnerRef"
+            :best="best.bearRunner"
+            @score="onBearScore"
+            @honey="onBearHoney"
+            @best="onBearBest"
+            @gameover="onBearGameOver"
+          />
+          <p class="stage-hint">空格 / ↑ / 点击跳跃躲树桩，蜂蜜罐 +10 分；撞上树桩即结束，最高分自动存本地。</p>
         </div>
 
         <!-- 森林翻牌 -->
@@ -184,6 +198,7 @@
 
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import BearRunner from './BearRunner.vue'
 
 const props = defineProps({
   token: { type: String, default: '' },
@@ -203,6 +218,16 @@ const GAMES = [
     unit: '分',
     time: '无尽模式',
     desc: '熊大向前狂奔！跳过树桩和横木，滑铲躲开低垂树枝，顺手收集蜂蜜罐和松果。'
+  },
+  {
+    id: 'bearRunner',
+    icon: '🐻',
+    name: '熊大快跑',
+    color: '#e8a33d',
+    unit: '分',
+    time: '无尽模式',
+    badge: '经典跑酷',
+    desc: '单键操作的经典跑酷！空格或点击让熊大跳过树桩，沿途吃掉蜂蜜罐加分，撞上就结束，看看能跑多远。'
   },
   {
     id: 'honey',
@@ -261,13 +286,13 @@ function closeJungle() {
   jungleOpen.value = false
   readJungleProgress()
 }
-const best = reactive({ run: 0, honey: 0, mole: 0, match: 0 })
+const best = reactive({ run: 0, bearRunner: 0, honey: 0, mole: 0, match: 0 })
 const result = ref(null)
 const activeGame = computed(() => GAMES.find((g) => g.id === active.value) || GAMES[0])
 
 try {
   const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
-  ;['run', 'honey', 'mole', 'match'].forEach((k) => {
+  ;['run', 'bearRunner', 'honey', 'mole', 'match'].forEach((k) => {
     if (typeof raw[k] === 'number') best[k] = raw[k]
   })
 } catch {
@@ -280,6 +305,31 @@ function saveBest() {
   } catch {
     /* 忽略 */
   }
+}
+
+/* ===================== 熊大快跑（独立组件）事件桥接 ===================== */
+const bearRunnerRef = ref(null)
+const bearRunnerScore = ref(0)
+const bearRunnerHoney = ref(0)
+function onBearScore(v) {
+  bearRunnerScore.value = v
+}
+function onBearHoney(v) {
+  bearRunnerHoney.value = v
+}
+function onBearBest(v) {
+  if (v > best.bearRunner) {
+    best.bearRunner = v
+    saveBest()
+  }
+}
+function onBearGameOver(p) {
+  if (p && p.best > best.bearRunner) {
+    best.bearRunner = p.best
+    saveBest()
+  }
+  // 与其余游戏一致：登录后上报成绩，后端只在破纪录时更新
+  if (p) submitScore('bearRunner', p.score)
 }
 
 /* ===================== 成绩落库（MySQL boonie_game_score） ===================== */
@@ -1655,6 +1705,7 @@ const hudScore = computed(() => {
   if (active.value === 'honey') return honeyScore.value
   if (active.value === 'mole') return moleScore.value
   if (active.value === 'run') return runScore.value
+  if (active.value === 'bearRunner') return bearRunnerScore.value
   return matchMoves.value
 })
 
@@ -1662,6 +1713,7 @@ const hudTime = computed(() => {
   if (active.value === 'honey') return `${honeyTime.value}s`
   if (active.value === 'mole') return `${moleTime.value}s`
   if (active.value === 'run') return `${runHoney.value} 🍯`
+  if (active.value === 'bearRunner') return `${bearRunnerHoney.value} 🍯`
   return `${matchSeconds.value}s`
 })
 
@@ -1669,6 +1721,7 @@ const stageSub = computed(() => {
   const id = activeGame.value.id
   if (id === 'match') return '翻出所有成对卡片'
   if (id === 'run') return `无尽模式 · 速度 Lv.${runLevel.value}`
+  if (id === 'bearRunner') return '无尽模式 · 空格跳跃躲树桩'
   return '30 秒挑战'
 })
 
@@ -1690,7 +1743,11 @@ function startGame(id) {
   }
   if (id === 'honey') nextTick(startHoney)
   else if (id === 'run') nextTick(startRun)
-  else if (id === 'mole') startMole()
+  else if (id === 'bearRunner') {
+    bearRunnerScore.value = 0
+    bearRunnerHoney.value = 0
+    nextTick(() => bearRunnerRef.value && bearRunnerRef.value.start())
+  } else if (id === 'mole') startMole()
   else startMatch()
 }
 

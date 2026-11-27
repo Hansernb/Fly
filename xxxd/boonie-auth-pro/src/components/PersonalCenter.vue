@@ -30,22 +30,14 @@
       >{{ t.icon }} {{ t.label }}</button>
     </nav>
 
-    <!-- ============ 我的订单 ============ -->
+    <!-- ============ 我的订单（引导到会员中心查看真实订单） ============ -->
     <section v-if="tab === 'orders'" class="pc-panel">
-      <div v-if="orders.length" class="pc-list">
-        <article v-for="o in orders" :key="o.orderNo" class="pc-order">
-          <div class="pc-order-head">
-            <span class="pc-order-no">🧾 订单号 {{ o.orderNo }}</span>
-            <span class="pc-order-time">{{ o.createdAt }}</span>
-          </div>
-          <div class="pc-order-body">
-            <span class="pc-order-name">{{ o.ticket?.emoji || '🎫' }} {{ o.ticket?.name || o.ticketName || '门票' }}</span>
-            <span class="pc-order-meta">{{ o.quantity }} 张 · {{ o.date }}</span>
-            <b class="pc-order-pay">¥{{ o.payable ?? o.total }}</b>
-          </div>
-        </article>
+      <div class="pc-redirect">
+        <div class="pc-redirect-ico">🧾</div>
+        <b>订单已统一到「森林会员中心」</b>
+        <p>真实订单、积分抵扣与积分明细均在会员中心查看，数据与数据库实时同步。</p>
+        <button class="pc-redirect-btn" type="button" @click="emit('member')">💎 前往会员中心</button>
       </div>
-      <div v-else class="pc-empty">🧾 还没有订单，去挑一张门票开启森林之旅吧～</div>
     </section>
 
     <!-- ============ 我的收藏 ============ -->
@@ -79,25 +71,14 @@
       <div v-else class="pc-empty">👣 还没有浏览记录，先去「热门项目推荐」看看吧～</div>
     </section>
 
-    <!-- ============ 积分明细 ============ -->
+    <!-- ============ 积分明细（引导到会员中心查看真实流水） ============ -->
     <section v-else-if="tab === 'points'" class="pc-panel">
-      <template v-if="logs.length">
-        <div class="pc-panel-head"><span>共 {{ logs.length }} 条记录 · 当前可用 {{ points }} 积分</span></div>
-        <ul class="pc-logs">
-          <li v-for="(l, i) in logs" :key="i" class="pc-log" :class="l.points > 0 ? 'in' : 'out'">
-            <span class="pc-log-dot">{{ l.points > 0 ? '↑' : '↓' }}</span>
-            <div class="pc-log-mid">
-              <b>{{ l.type }} · {{ l.remark || '积分变动' }}</b>
-              <span>{{ l.createdAt }}<em v-if="l.orderNo"> · 订单 {{ l.orderNo }}</em></span>
-            </div>
-            <div class="pc-log-right">
-              <b>{{ l.points > 0 ? '+' + l.points : l.points }}</b>
-              <span>余额 {{ l.balance }}</span>
-            </div>
-          </li>
-        </ul>
-      </template>
-      <div v-else class="pc-empty">🍯 还没有积分记录，购票即可自动开通会员并攒积分（1 元 = 1 积分）～</div>
+      <div class="pc-redirect">
+        <div class="pc-redirect-ico">🍯</div>
+        <b>积分明细已统一到「森林会员中心」</b>
+        <p>积分获取、抵扣流水与会员等级实时同步，登录账号后按账号查看。</p>
+        <button class="pc-redirect-btn" type="button" @click="emit('member')">💎 前往会员中心</button>
+      </div>
     </section>
 
     <!-- ============ 优惠券 ============ -->
@@ -150,7 +131,7 @@ import { ref, computed, onMounted } from 'vue'
 const props = defineProps({
   user: { type: Object, default: null }
 })
-const emit = defineEmits(['back', 'attraction'])
+const emit = defineEmits(['back', 'attraction', 'member'])
 
 /* ===== 用户头像：与首页导航栏头像保持一致 =====
    首页换头像时会写入 localStorage('boonie_user').avatar，
@@ -407,6 +388,41 @@ onMounted(() => {
   font-size: 14px;
   padding: 50px 16px;
 }
+/* 订单/积分引导到会员中心 */
+.pc-redirect {
+  text-align: center;
+  padding: 42px 18px;
+  background: rgba(255, 251, 240, 0.95);
+  border: 2px dashed var(--wood-light);
+  border-radius: 18px;
+}
+.pc-redirect-ico { font-size: 40px; line-height: 1; }
+.pc-redirect b {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--forest-deep);
+  margin: 12px 0 6px;
+}
+.pc-redirect p {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.pc-redirect-btn {
+  border: none;
+  background: var(--honey);
+  color: #4a3208;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 10px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px -10px rgba(255, 183, 3, 0.95);
+  transition: all 0.16s ease;
+}
+.pc-redirect-btn:hover { transform: translateY(-2px); background: #ffc733; }
 .pc-mini-btn {
   border: none;
   background: rgba(228, 87, 46, 0.1);

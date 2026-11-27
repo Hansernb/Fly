@@ -6,6 +6,7 @@ import com.fenglin.springboottest.common.AvatarStorage;
 import com.fenglin.springboottest.common.BizException;
 import com.fenglin.springboottest.entity.Attraction;
 import com.fenglin.springboottest.entity.Banner;
+import com.fenglin.springboottest.entity.Category;
 import com.fenglin.springboottest.entity.GameScore;
 import com.fenglin.springboottest.entity.Habitat;
 import com.fenglin.springboottest.entity.Member;
@@ -15,8 +16,10 @@ import com.fenglin.springboottest.entity.Show;
 import com.fenglin.springboottest.entity.Ticket;
 import com.fenglin.springboottest.entity.TicketOrder;
 import com.fenglin.springboottest.entity.User;
+import com.fenglin.springboottest.entity.Visit;
 import com.fenglin.springboottest.mapper.AttractionMapper;
 import com.fenglin.springboottest.mapper.BannerMapper;
+import com.fenglin.springboottest.mapper.CategoryMapper;
 import com.fenglin.springboottest.mapper.GameScoreMapper;
 import com.fenglin.springboottest.mapper.HabitatMapper;
 import com.fenglin.springboottest.mapper.MemberMapper;
@@ -26,6 +29,7 @@ import com.fenglin.springboottest.mapper.ShowMapper;
 import com.fenglin.springboottest.mapper.TicketMapper;
 import com.fenglin.springboottest.mapper.TicketOrderMapper;
 import com.fenglin.springboottest.mapper.UserMapper;
+import com.fenglin.springboottest.mapper.VisitMapper;
 import com.fenglin.springboottest.service.AuthService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,6 +84,10 @@ public class AdminController {
     private NoticeMapper noticeMapper;
     @Autowired
     private MemberMapper memberMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+    @Autowired
+    private VisitMapper visitMapper;
 
     /** 统一鉴权：必须是管理员 */
     private User requireAdmin(String authHeader) {
@@ -758,8 +766,10 @@ public class AdminController {
     /**
      * GET /api/admin/dashboard —— 访客数 / 订单量 / 门票销量 / 好评率 + 近 7 天趋势 + 票种销量分布
      * 口径：
-     *   访客数 = 注册用户数 + 游客订单去重手机号；订单量 = 非取消订单数；
+     *   访客数(visitors) = max(埋点去重 IP 数, 注册用户数 + 游客订单去重手机号)；
+     *   浏览量(pv) = boonie_visit 记录总数；订单量 = 非取消订单数；
      *   门票销量 = 非取消订单 quantity 之和；好评率 = 已通过评价中 4 星及以上占比。
+     *   说明：埋点数据为上线条后累积的真实访问，取大值兼容上线前的历史数据。
      */
     @GetMapping("/dashboard")
     public Map<String, Object> dashboard(
@@ -769,6 +779,13 @@ public class AdminController {
         List<User> users = userMapper.selectList(null);
         List<TicketOrder> orders = ticketOrderMapper.selectList(null);
         List<Review> reviews = reviewMapper.selectList(null);
+        List<Visit> visits = visitMapper.selectList(null);
+
+        // 真实访问统计：PV = 记录数，UV = 去重 IP 数
+        Set<String> visitIps = new HashSet<>();
+        for (Visit v : visits) {
+            if (v.getIp() != null && !v.getIp().isBlank()) visitIps.add(v.getIp());
+        }
 
         List<TicketOrder> active = new ArrayList<>();
         for (TicketOrder o : orders) if (!"已取消".equals(o.getStatus())) active.add(o);
@@ -796,7 +813,9 @@ public class AdminController {
         double goodRate = approved.isEmpty() ? 0 : Math.round(good * 10000.0 / approved.size()) / 100.0;
 
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("visitors", users.size() + guestPhones.size());
+        // 真实埋点 UV 与旧口径取大值，兼容埋点上线前的历史数据
+        summary.put("visitors", Math.max(visitIps.size(), users.size() + guestPhones.size()));
+        summary.put("pv", visits.size());
         summary.put("orders", active.size());
         summary.put("ticketsSold", ticketsSold);
         summary.put("goodRate", goodRate);
@@ -817,6 +836,13 @@ public class AdminController {
                         && o.getBuyerPhone() != null && !o.getBuyerPhone().isBlank())
                     dayGuests.add(o.getBuyerPhone());
             }
+            // 当天真实埋点 UV（去重 IP）
+            Set<String> dayVisitIps = new HashSet<>();
+            for (Visit v : visits) {
+                if (v.getVisitDate() != null && v.getVisitDate().equals(day)
+                        && v.getIp() != null && !v.getIp().isBlank())
+                    dayVisitIps.add(v.getIp());
+            }
             long dayOrders = active.stream().filter(o -> sameDay(o.getCreatedAt(), day)).count();
             long dayTickets = 0;
             for (TicketOrder o : active) {
@@ -829,7 +855,8 @@ public class AdminController {
 
             Map<String, Object> t = new LinkedHashMap<>();
             t.put("date", day.toString().substring(5));
-            t.put("visitors", dayVisitors + dayGuests.size());
+            t.put("visitors", Math.max(dayVisitIps.size(), dayVisitors + dayGuests.size()));
+            t.put("pv", (int) visits.stream().filter(v -> v.getVisitDate() != null && v.getVisitDate().equals(day)).count());
             t.put("orders", dayOrders);
             t.put("tickets", dayTickets);
             t.put("goodRate", dayRate);
@@ -1009,6 +1036,84 @@ public class AdminController {
         if (noticeMapper.selectById(id) == null) throw new BizException(404, "公告不存在");
         noticeMapper.deleteById(id);
         return ok(id);
+    }
+
+    // ==================== 项目分类管理（借鉴 java_travel 的 Classification） ====================
+
+    /** GET /api/admin/categories —— 全部分类（含停用，后台用） */
+    @GetMapping("/categories")
+    public Map<String, Object> listCategories(
+            @RequestHeader(value = "Authorization", required = false) String auth) {
+        requireAdmin(auth);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Category c : categoryMapper.selectList(null)) list.add(categoryMap(c));
+        return ok(list);
+    }
+
+    /** POST /api/admin/categories */
+    @PostMapping("/categories")
+    public Map<String, Object> createCategory(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        String name = str(body.get("name"));
+        if (name == null || name.isBlank()) throw new BizException(400, "分类名称不能为空");
+        Category c = new Category();
+        c.setName(name.trim());
+        c.setEmoji(def(body.get("emoji"), "🎡"));
+        c.setColor(def(body.get("color"), "#2f7d4f"));
+        c.setSortNo(intVal(body.get("sortNo"), 0));
+        c.setEnabled(boolVal(body.get("enabled"), true));
+        c.setCreatedAt(LocalDateTime.now());
+        try {
+            categoryMapper.insert(c);
+        } catch (Exception e) {
+            throw new BizException(400, "分类名称已存在");
+        }
+        return ok(categoryMap(c));
+    }
+
+    /** PUT /api/admin/categories/{id} */
+    @PutMapping("/categories/{id}")
+    public Map<String, Object> updateCategory(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(auth);
+        Category c = categoryMapper.selectById(id);
+        if (c == null) throw new BizException(404, "分类不存在");
+        if (body.containsKey("name")) c.setName(str(body.get("name")));
+        if (body.containsKey("emoji")) c.setEmoji(str(body.get("emoji")));
+        if (body.containsKey("color")) c.setColor(str(body.get("color")));
+        if (body.containsKey("sortNo")) c.setSortNo(intVal(body.get("sortNo"), c.getSortNo()));
+        if (body.containsKey("enabled")) c.setEnabled(boolVal(body.get("enabled"), c.getEnabled()));
+        try {
+            categoryMapper.updateById(c);
+        } catch (Exception e) {
+            throw new BizException(400, "分类名称已存在");
+        }
+        return ok(categoryMap(c));
+    }
+
+    /** DELETE /api/admin/categories/{id} */
+    @DeleteMapping("/categories/{id}")
+    public Map<String, Object> deleteCategory(
+            @RequestHeader(value = "Authorization", required = false) String auth,
+            @PathVariable Long id) {
+        requireAdmin(auth);
+        categoryMapper.deleteById(id);
+        return ok(id);
+    }
+
+    private Map<String, Object> categoryMap(Category c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", c.getId());
+        m.put("name", c.getName());
+        m.put("emoji", c.getEmoji());
+        m.put("color", c.getColor());
+        m.put("sortNo", c.getSortNo());
+        m.put("enabled", c.getEnabled());
+        return m;
     }
 
     // ==================== 小工具 ====================

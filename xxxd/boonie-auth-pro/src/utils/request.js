@@ -7,6 +7,18 @@
 const BASE = '/api'
 
 /**
+ * 401 统一拦截（借鉴 vue3-element-admin 的 request 响应拦截器）
+ * 由 main.js 注册一次全局处理器：清会话 + 轻提示。
+ * 默认未注册时行为完全不变，兼容各处已有的 401 处理（如 /api/me 匿名探测）。
+ */
+let unauthorizedHandler = null
+/** 注册 401 全局处理器；返回取消注册函数 */
+export function setUnauthorizedHandler(fn) {
+  unauthorizedHandler = typeof fn === 'function' ? fn : null
+  return () => { if (unauthorizedHandler === fn) unauthorizedHandler = null }
+}
+
+/**
  * @param {string} path    /attractions 这样的相对路径（会自动拼上 /api）
  * @param {object} options
  * @param {string} [options.method='GET']
@@ -14,8 +26,9 @@ const BASE = '/api'
  * @param {string} [options.token]       有值时注入 Authorization: Bearer <token>
  * @param {object} [options.headers]
  * @param {AbortSignal} [options.signal]
+ * @param {boolean} [options.skipUnauthorized=false] 401 时不触发全局处理器（如 /api/me 匿名探测）
  */
-export async function request(path, { method = 'GET', body, token, headers = {}, signal } = {}) {
+export async function request(path, { method = 'GET', body, token, headers = {}, signal, skipUnauthorized = false } = {}) {
   const opts = { method, headers: { ...headers }, signal }
 
   if (token) opts.headers.Authorization = `Bearer ${token}`
@@ -43,6 +56,10 @@ export async function request(path, { method = 'GET', body, token, headers = {},
   }
 
   if (!res.ok) {
+    // 401 且调用方未声明跳过时，触发全局处理器（清会话 + 提示）
+    if (res.status === 401 && !skipUnauthorized && unauthorizedHandler) {
+      try { unauthorizedHandler(path, json) } catch { /* 处理器异常不影响请求错误抛出 */ }
+    }
     const err = new Error(json?.message || json?.error || `请求失败（HTTP ${res.status}）`)
     err.status = res.status
     err.data = json

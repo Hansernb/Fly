@@ -3,11 +3,13 @@ package com.fenglin.springboottest.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fenglin.springboottest.entity.Banner;
+import com.fenglin.springboottest.entity.Category;
 import com.fenglin.springboottest.entity.Habitat;
 import com.fenglin.springboottest.entity.Notice;
 import com.fenglin.springboottest.entity.Show;
 import com.fenglin.springboottest.entity.Ticket;
 import com.fenglin.springboottest.mapper.BannerMapper;
+import com.fenglin.springboottest.mapper.CategoryMapper;
 import com.fenglin.springboottest.mapper.HabitatMapper;
 import com.fenglin.springboottest.mapper.NoticeMapper;
 import com.fenglin.springboottest.mapper.ShowMapper;
@@ -40,6 +42,26 @@ public class ContentController {
     private BannerMapper bannerMapper;
     @Autowired
     private NoticeMapper noticeMapper;
+    @Autowired
+    private CategoryMapper categoryMapper;
+
+    /** GET /api/categories —— 项目分类字典（仅启用，按 sort_no 排序） */
+    @GetMapping("/categories")
+    public Map<String, Object> categories() {
+        LambdaQueryWrapper<Category> qw = new LambdaQueryWrapper<>();
+        qw.eq(Category::getEnabled, true).orderByAsc(Category::getSortNo, Category::getId);
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Category c : categoryMapper.selectList(qw)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", c.getId());
+            m.put("name", c.getName());
+            m.put("emoji", c.getEmoji());
+            m.put("color", c.getColor());
+            m.put("sortNo", c.getSortNo());
+            list.add(m);
+        }
+        return ok(list);
+    }
 
     /** GET /api/habitats —— 森林栖息地列表 */
     @GetMapping("/habitats")
